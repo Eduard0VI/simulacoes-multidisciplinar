@@ -1,0 +1,29 @@
+/* Design tokens — scientific monitoring design system.
+   Reusable for the volcano and earthquake simulators: override only --accent / --map-* */
+:root {
+  --bg: #0B0F14;
+  --bg-2: #111820;
+  --panel: #151D26;
+  --border: #27313C;
+  --text: #F1F4F7;
+  --text-2: #98A4B3;
+  --accent: #D9A441;
+  --danger: #D95C59;
+  --success: #5FAE7B;
+
+  --map-water: #0D1620;
+  --map-land: #161F29;
+
+  --hover: #1B2531;
+  --radius: 6px;
+  --header-h: 64px;
+
+  --font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --fs-h1: 32px;
+  --fs-h2: 20px;
+  --fs-h3: 16px;
+  --fs-body: 14px;
+  --fs-cap: 12px;
+
+  --t-fast: 160ms;
+}

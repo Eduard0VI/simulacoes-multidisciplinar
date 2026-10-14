@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Volcano Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app" id="app">
+
+  <!-- HEADER -->
+  <header class="header">
+    <div class="brand">
+      <div class="brand-title">VOLCANO LAB</div>
+      <div class="brand-sub">INTERACTIVE ERUPTION SIMULATOR</div>
+    </div>
+    <div class="live"><span class="dot" id="liveDot"></span><span id="liveText">SIMULAÇÃO AO VIVO</span></div>
+    <div class="header-actions">
+      <button class="btn" id="btnReset">REINICIAR</button>
+      <button class="btn" id="btnPresent">MODO APRESENTAÇÃO</button>
+    </div>
+  </header>
+
+  <main class="layout">
+
+    <!-- PARAMETER PANEL -->
+    <aside class="panel" id="paramPanel">
+      <h2 class="panel-title">VOLCANO PARAMETERS</h2>
+      <p class="panel-desc">Ajuste parâmetros ambientais simplificados e observe o modelo visual resultante.</p>
+      <div id="params"></div>
+      <div class="actions">
+        <button class="btn primary" id="btnSimulate">SIMULAR ERUPÇÃO</button>
+        <button class="btn" id="btnWhy">POR QUE ISSO ACONTECE?</button>
+      </div>
+      <p class="note"><b>MODELO VISUAL EDUCACIONAL</b><br>Os valores são simplificados e não representam medições ou previsões geofísicas reais.</p>
+    </aside>
+
+    <!-- CENTER -->
+    <section class="center">
+      <div class="toolbar">
+        <div class="seg" id="viewSeg">
+          <button data-view="0" class="on">VISÃO DE SUPERFÍCIE</button>
+          <button data-view="1">CORTE TRANSVERSAL</button>
+        </div>
+        <span class="tag">MODELO VISUAL EDUCACIONAL</span>
+      </div>
+      <div class="stage">
+        <canvas id="cv"></canvas>
+        <div class="hud hud-tl"><span id="hudPhase">REPOUSO</span></div>
+        <div class="hud hud-tr"><span id="hudWind"></span></div>
+        <div class="caption" id="caption"></div>
+      </div>
+      <div class="timeline" id="timeline"></div>
+      <div class="pres-controls pres-only">
+        <button class="btn primary" id="pPlay">▶ PLAY</button>
+        <button class="btn" id="pNext">PRÓXIMA ETAPA ›</button>
+        <button class="btn" id="pView">VER CORTE TRANSVERSAL</button>
+      </div>
+    </section>
+
+    <!-- STATUS PANEL -->
+    <aside class="panel" id="statusPanel">
+      <h2 class="panel-title">VOLCANO STATUS</h2>
+      <div class="card big">
+        <div class="k">PRESSÃO</div>
+        <div class="v" id="stPressure">42%</div>
+        <div class="bar"><i id="stBar"></i></div>
+      </div>
+      <div class="grid2">
+        <div class="card"><div class="k" id="kMagma">MOVIMENTO DO MAGMA</div><div class="v sm" id="stMagma">—</div></div>
+        <div class="card"><div class="k">ATIVIDADE SÍSMICA</div><div class="v sm" id="stSeis">—</div></div>
+      </div>
+      <div class="card"><div class="k" id="kEruption">RISCO DE ERUPÇÃO</div><div class="v sm" id="stEruption">—</div></div>
+
+      <div class="adv">
+        <h3 class="sub">EFFECTS</h3>
+        <div class="rows">
+          <div class="row"><span>FLUXO DE LAVA</span><b id="efLava">—</b></div>
+          <div class="row"><span>NUVEM DE CINZAS</span><b id="efAsh">—</b></div>
+          <div class="row"><span>TREMOR DO SOLO</span><b id="efShake">—</b></div>
+        </div>
+
+        <h3 class="sub">SIMULATION TIME</h3>
+        <div class="seg full" id="speedSeg">
+          <button data-s="1" class="on">1X</button><button data-s="2">2X</button><button data-s="4">4X</button>
+        </div>
+        <div class="trio">
+          <button class="btn" id="btnPause">PAUSAR</button>
+          <button class="btn" id="btnResume">RETOMAR</button>
+          <button class="btn" id="btnReset2">REINICIAR</button>
+        </div>
+
+        <h3 class="sub">SEQUÊNCIA DE FASES</h3>
+        <ol class="phases" id="phaseList"></ol>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<!-- MODAL -->
+<div class="modal" id="modal" hidden>
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+    <div class="modal-head">
+      <h2 id="mTitle">POR QUE ISSO ACONTECE?</h2>
+      <button class="btn" id="mClose">FECHAR</button>
+    </div>
+    <p class="panel-desc">Explicações simples para cada elemento do modelo visual.</p>
+    <div class="edu" id="eduList"></div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

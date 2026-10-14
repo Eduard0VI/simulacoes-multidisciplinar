@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FAT MAN — Simulador de Impacto Histórico</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/tokens.css">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<header class="app-header">
+  <div class="brand">
+    <h1 class="brand-title">FAT MAN</h1>
+    <span class="brand-sub">SIMULADOR DE IMPACTO HISTÓRICO</span>
+  </div>
+  <div class="mode-indicator" aria-live="polite"><span class="dot"></span><span id="modeLabel">MODO HISTÓRICO</span></div>
+  <div class="header-actions">
+    <button class="btn btn-ghost only-small" id="btnControls" type="button">CONTROLES</button>
+    <button class="btn btn-ghost only-small" id="btnResults" type="button">RESULTADOS</button>
+    <button class="btn" id="btnReset" type="button">REINICIAR</button>
+    <button class="btn btn-primary-outline" id="btnPresent" type="button" aria-pressed="false">MODO APRESENTAÇÃO</button>
+  </div>
+</header>
+
+<div class="drawer-backdrop" id="backdrop"></div>
+
+<main class="layout">
+
+  <!-- ESQUERDA: controles -->
+  <aside class="side side-left panel-col" id="controls" aria-label="Controles do cenário">
+    <h2 class="panel-title">CENÁRIO</h2>
+    <p class="muted small">Explore o evento histórico por meio de uma simulação visual controlada.</p>
+
+    <div class="control">
+      <div class="control-head"><label class="control-label" id="lblLoc">Local da Detonação</label></div>
+      <div class="segmented" role="group" aria-labelledby="lblLoc">
+        <button type="button" class="seg is-active" data-mode="historical" aria-pressed="true">HISTÓRICO</button>
+        <button type="button" class="seg" data-mode="custom" aria-pressed="false">PERSONALIZADO</button>
+      </div>
+      <p class="hint" id="locHint">Fixo no ponto histórico de referência (distrito de Urakami).</p>
+    </div>
+
+    <div class="control">
+      <div class="control-head">
+        <label class="control-label" for="rngHeight">Altura da Detonação</label>
+        <span class="value-chip" id="valHeight">MÉDIA · 0,50</span>
+      </div>
+      <input type="range" id="rngHeight" min="0" max="100" value="50">
+      <div class="range-ends"><span>BAIXA</span><span>ALTA</span></div>
+      <p class="hint">Apenas educativo: altera como as zonas visuais são distribuídas.</p>
+    </div>
+
+    <div class="control">
+      <div class="control-head">
+        <label class="control-label" for="rngIntensity">Intensidade do Cenário</label>
+        <span class="value-chip" id="valIntensity">MÉDIA · 50</span>
+      </div>
+      <input type="range" id="rngIntensity" min="0" max="100" value="50">
+      <div class="range-ends"><span>0</span><span>INTENSIDADE ABSTRATA</span><span>100</span></div>
+      <p class="hint">Seleciona uma predefinição visual (BAIXA / MÉDIA / ALTA). Não é uma grandeza física.</p>
+    </div>
+
+    <div class="control">
+      <div class="control-head"><label class="control-label" for="selAtmo">Condições Atmosféricas</label></div>
+      <select id="selAtmo">
+        <option value="NORMAL">NORMAL</option>
+        <option value="WINDY">VENTOSO</option>
+        <option value="RAIN">CHUVA</option>
+        <option value="CLEAR">LIMPO</option>
+      </select>
+      <p class="hint">Afeta apenas a aparência visual (deriva da nuvem, dispersão de partículas, névoa).</p>
+    </div>
+  </aside>
+
+  <!-- CENTRO: canvas -->
+  <section class="canvas-area" aria-label="Área de simulação">
+    <div class="stage" id="stage">
+      <svg id="map" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Mapa estilizado de Nagasaki">
+        <defs>
+          <radialGradient id="gThermal">
+            <stop offset="0" stop-color="#D9A441" stop-opacity="0.75"/>
+            <stop offset="0.6" stop-color="#D9A441" stop-opacity="0.28"/>
+            <stop offset="1" stop-color="#D9A441" stop-opacity="0"/>
+          </radialGradient>
+          <pattern id="gridPat" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M40 0H0V40" fill="none" stroke="#27313C" stroke-width="0.5" opacity="0.5"/>
+          </pattern>
+        </defs>
+
+        <!-- mapa base -->
+        <rect width="800" height="600" fill="var(--map-water)"/>
+        <path id="land" fill="var(--map-land)" d="M0,0 L800,0 L800,600 L560,600 C520,540 480,480 450,420 C430,380 420,340 410,310 C400,290 380,285 372,300 C360,330 330,360 300,400 C250,460 200,500 120,520 C70,535 30,560 0,570 Z"/>
+        <rect width="800" height="600" fill="url(#gridPat)" pointer-events="none"/>
+        <g id="relief" fill="none" stroke="#2B3744" stroke-width="1">
+          <ellipse cx="650" cy="230" rx="130" ry="95"/><ellipse cx="650" cy="230" rx="95" ry="68"/><ellipse cx="650" cy="230" rx="58" ry="40"/><ellipse cx="650" cy="230" rx="24" ry="16"/>
+          <ellipse cx="160" cy="160" rx="120" ry="80"/><ellipse cx="160" cy="160" rx="82" ry="52"/><ellipse cx="160" cy="160" rx="42" ry="26"/>
+          <ellipse cx="300" cy="290" rx="60" ry="42"/><ellipse cx="300" cy="290" rx="30" ry="20"/>
+          <ellipse cx="640" cy="470" rx="110" ry="60"/><ellipse cx="640" cy="470" rx="60" ry="30"/>
+        </g>
+        <g id="urban" fill="#1E2A36" stroke="#2B3744" stroke-width="0.8">
+          <path d="M340,330 C350,300 375,262 400,248 C420,236 440,232 452,250 C462,268 452,300 440,320 C428,345 420,370 425,400 C410,380 395,350 372,350 C355,350 345,342 340,330 Z"/>
+          <path d="M420,60 C445,55 485,70 492,110 C498,160 480,200 470,236 C455,246 438,236 430,214 C424,170 410,100 420,60 Z"/>
+        </g>
+        <path id="river" d="M478,40 C468,110 450,190 432,240 C420,268 408,284 402,294" fill="none" stroke="#3A5A78" stroke-width="3" stroke-linecap="round" opacity="0.8"/>
+
+        <!-- atmosfera -->
+        <rect id="haze" width="800" height="600" fill="#98A4B3" opacity="0" pointer-events="none"/>
+
+        <!-- camadas de efeito -->
+        <g id="zones"></g>
+        <circle id="thermal" r="0" fill="url(#gThermal)" opacity="0"/>
+        <circle id="ring1" fill="none" stroke="#F1F4F7" r="0" opacity="0"/>
+        <circle id="ring2" fill="none" stroke="#D9A441" r="0" opacity="0"/>
+
+        <!-- rótulos -->
+        <g id="labels" font-size="11" fill="#98A4B3" pointer-events="none">
+          <text x="150" y="560" font-size="13" letter-spacing="3" opacity="0.55">BAÍA DE NAGASAKI</text>
+          <text x="500" y="60" font-size="10" opacity="0.7" transform="rotate(75 500 60)">RIO URAKAMI</text>
+          <g id="landmarks" fill="#98A4B3">
+            <circle cx="397" cy="288" r="3"/><text x="300" y="282">Estação de Nagasaki</text>
+            <circle cx="431" cy="352" r="3"/><text x="440" y="356">Dejima (aprox.)</text>
+            <circle cx="482" cy="190" r="3"/><text x="490" y="194">Catedral de Urakami</text>
+            <circle cx="440" cy="238" r="3"/><text x="448" y="242">Fábrica de armas (local)</text>
+          </g>
+        </g>
+
+        <!-- partículas / nuvem / marcador -->
+        <g id="rain" pointer-events="none"></g>
+        <g id="particles" pointer-events="none"></g>
+        <g id="cloud" pointer-events="none" opacity="0"></g>
+        <g id="marker">
+          <g id="markerScale">
+            <circle id="mHalo" class="m-halo" r="14" fill="none" stroke="#D9A441" stroke-width="1"/>
+            <circle r="9" fill="none" stroke="#D9A441" stroke-width="1.2" opacity="0.7"/>
+            <circle id="mCore" r="4.5" fill="#D9A441"/>
+          </g>
+          <text id="mLabel" x="14" y="-14" font-size="11" fill="#F1F4F7" font-weight="600" letter-spacing="1">HIPOCENTRO</text>
+        </g>
+
+        <!-- bússola -->
+        <g transform="translate(748 50)" fill="#98A4B3" font-size="11" text-anchor="middle" pointer-events="none">
+          <path d="M0,-22 L6,4 L0,0 L-6,4 Z" fill="#98A4B3" opacity="0.8"/><text y="20">N</text>
+        </g>
+
+        <!-- flash -->
+        <rect id="flashRect" width="800" height="600" fill="#fff" opacity="0" pointer-events="none"/>
+        <circle id="flashCore" r="90" fill="#fff" opacity="0" pointer-events="none"/>
+      </svg>
+
+      <div class="banner" id="banner" aria-live="polite"></div>
+      <div class="map-note">Mapa estilizado — fora de escala. Visualização ilustrativa.</div>
+      <div class="legend" id="legend">
+        <div class="legend-title">ZONA DE EFEITO VISUALIZADA</div>
+        <div class="legend-row"><i style="background:var(--danger)"></i>Zona A — mais interna</div>
+        <div class="legend-row"><i style="background:var(--accent)"></i>Zona B — intermediária</div>
+        <div class="legend-row"><i style="background:var(--text-2)"></i>Zona C — externa</div>
+        <div class="legend-foot">Não representa o raio exato de danos.</div>
+      </div>
+      <div class="essential" id="essential">
+        <div class="ess-k">NAGASAKI, JAPÃO</div>
+        <div class="ess-v">9 de agosto de 1945 · 11h02 (hora local)</div>
+      </div>
+      <div class="toast" id="toast" role="status"></div>
+    </div>
+
+    <div class="stage-toolbar">
+      <ol class="phases" id="phases" aria-label="Fases da simulação"></ol>
+      <button class="btn btn-primary" id="btnSim" type="button">SIMULAR EVENTO</button>
+    </div>
+
+    <div class="present-bar" id="presentBar">
+      <button class="btn" id="btnPrev" type="button">← ANTERIOR</button>
+      <button class="btn btn-primary" id="btnPlay" type="button">REPRODUZIR</button>
+      <div class="present-caption">
+        <div class="step-k" id="stepK">ETAPA 01</div>
+        <div class="step-v" id="stepV">LOCAL HISTÓRICO</div>
+        <div class="step-d" id="stepD"></div>
+        <div class="step-dots" id="stepDots"></div>
+      </div>
+      <button class="btn" id="btnNext" type="button">PRÓXIMO →</button>
+    </div>
+  </section>
+
+  <!-- DIREITA: resultados -->
+  <aside class="side side-right panel-col" id="results" aria-label="Resultados e contexto">
+    <h2 class="panel-title">RESULTADOS DA SIMULAÇÃO</h2>
+    <div id="resultsBody"></div>
+
+    <h2 class="panel-title ctx-title">CONTEXTO HISTÓRICO</h2>
+    <div class="context">
+      <p><strong>Fat Man</strong> foi o nome código de uma bomba de plutônio usada pelos Estados Unidos em <strong>Nagasaki, Japão, em 9 de agosto de 1945</strong> — o segundo e, até hoje, último uso de uma arma nuclear em guerra.</p>
+      <p>Ocorreu três dias após Hiroshima, nos últimos dias da Segunda Guerra Mundial. O Japão anunciou sua rendição em 15 de agosto de 1945.</p>
+      <p>A bomba explodiu sobre o distrito de Urakami. Dezenas de milhares de pessoas morreram, e os sobreviventes (<em>hibakusha</em>) conviveram com consequências de longo prazo.</p>
+    </div>
+    <button class="btn btn-block" id="btnMore" type="button">SAIBA MAIS</button>
+  </aside>
+</main>
+
+<dialog id="modal" aria-labelledby="modalTitle">
+  <div class="modal-head">
+    <h2 id="modalTitle">Nagasaki, 9 de agosto de 1945</h2>
+    <button class="btn btn-ghost" id="btnClose" type="button" aria-label="Fechar">FECHAR ✕</button>
+  </div>
+  <div class="modal-body">
+    <h3>A arma</h3>
+    <p>“Fat Man” foi o nome dado à bomba de plutônio desenvolvida no Projeto Manhattan. Foi a segunda arma nuclear usada em guerra, depois da bomba de urânio “Little Boy”, lançada sobre Hiroshima em 6 de agosto de 1945. Este simulador deliberadamente não contém nenhum detalhe técnico da arma.</p>
+    <h3>O alvo</h3>
+    <p>O alvo principal naquele dia era a cidade de Kokura. Nuvens e fumaça sobre ela levaram o B-29 <em>Bockscar</em> ao alvo secundário, Nagasaki, importante porto e centro industrial. Por causa das colinas e vales de Nagasaki, os efeitos concentraram-se principalmente no vale de Urakami.</p>
+    <h3>O evento</h3>
+    <p>Por volta das 11h02 (hora local), a bomba explodiu a cerca de 500 metros de altura sobre o distrito de Urakami, em uma explosão aérea. O clarão, o calor e a onda de choque destruíram grande parte do vale e provocaram incêndios generalizados.</p>
+    <h3>Impacto humano</h3>
+    <p>As estimativas variam conforme a fonte: dezenas de milhares de pessoas morreram imediatamente e o número aumentou de forma considerável até o fim de 1945, por ferimentos, queimaduras e doença da radiação. Os sobreviventes, os <em>hibakusha</em>, enfrentaram consequências sociais e de saúde por décadas.</p>
+    <h3>Contexto e legado</h3>
+    <p>Os bombardeios ocorreram nos últimos dias da Segunda Guerra Mundial. O Japão anunciou sua rendição em 15 de agosto de 1945. Hoje, Nagasaki abriga o Parque da Paz e o Museu da Bomba Atômica, e a cidade defende o desarmamento nuclear.</p>
+    <h3>Sobre esta ferramenta</h3>
+    <p>O mapa é estilizado, as zonas são conceituais e todos os controles são parâmetros abstratos e educativos. Nada aqui é uma previsão de danos nem um modelo físico.</p>
+  </div>
+</dialog>
+
+<script src="js/effects.js"></script>
+<script src="js/mapview.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

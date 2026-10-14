@@ -1,0 +1,1177 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Earthquake Lab — Seismic Wave Simulator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0B0F14;--panel:#151D26;--panel2:#10161D;--border:#27313C;--text:#F1F4F7;--muted:#98A4B3;--accent:#D9A441;--danger:#D95C59;--ok:#5FAE7B;--warn:#D58C45;--t:200ms}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--text);font-family:Inter,system-ui,"Segoe UI",sans-serif;font-size:14px;display:flex;flex-direction:column;overflow:hidden;-webkit-font-smoothing:antialiased}
+.num{font-variant-numeric:tabular-nums}
+button{font-family:inherit}
+/* ---------- header ---------- */
+.hdr{height:64px;flex:none;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:0 24px;border-bottom:1px solid var(--border);gap:16px}
+.brand h1{font-size:18px;letter-spacing:.16em;font-weight:700;line-height:1.1}
+.brand p{font-size:10.5px;letter-spacing:.24em;color:var(--accent);font-weight:600;margin-top:3px}
+.brand{display:flex;align-items:center;gap:14px}
+.live{display:flex;align-items:center;gap:10px;font-size:11px;letter-spacing:.22em;color:var(--muted);font-weight:600}
+.live i{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 0 rgba(95,174,123,.6);animation:ping 2s infinite}
+@keyframes ping{70%{box-shadow:0 0 0 9px rgba(95,174,123,0)}100%{box-shadow:0 0 0 0 rgba(95,174,123,0)}}
+.hdr-actions{display:flex;gap:10px;justify-content:flex-end}
+.drawer-btn{display:none}
+/* ---------- buttons ---------- */
+.btn{height:36px;padding:0 16px;border-radius:8px;border:1px solid var(--border);background:var(--panel);color:var(--text);font-size:11.5px;font-weight:600;letter-spacing:.1em;cursor:pointer;transition:all var(--t);white-space:nowrap}
+.btn:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#0B0F14}
+.btn.primary:hover:not(:disabled){background:#e6b455;color:#0B0F14}
+.btn.on{border-color:var(--accent);color:var(--accent);background:rgba(217,164,65,.12)}
+.btn.sm{height:32px;padding:0 12px}
+/* ---------- layout ---------- */
+.grid{flex:1;min-height:0;display:grid;grid-template-columns:300px minmax(0,1fr) 320px;gap:16px;padding:16px 16px 0}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:20px;overflow:auto;min-height:0;transition:transform 250ms}
+.ptitle{font-size:11.5px;letter-spacing:.18em;color:var(--muted);font-weight:700;margin-bottom:6px}
+.param{padding:16px 0;border-top:1px solid var(--border)}
+.param:first-of-type{border-top:0}
+.ptag{font-size:9.5px;letter-spacing:.2em;color:var(--accent);font-weight:600;margin-bottom:8px}
+.prow{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;gap:8px}
+.pname{font-size:12.5px;font-weight:600;letter-spacing:.1em;display:flex;align-items:center;gap:6px}
+.pval{font-size:13px;color:var(--accent);font-weight:600}
+.rangeends{display:flex;justify-content:space-between;font-size:10px;letter-spacing:.14em;color:var(--muted);margin-top:4px}
+.pnote{font-size:11px;color:var(--muted);margin-top:10px;line-height:1.5}
+.pnote b{color:var(--text);font-weight:600}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:20px;background:transparent;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:linear-gradient(90deg,var(--accent) var(--p,50%),var(--border) var(--p,50%))}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;margin-top:-6px;border-radius:50%;background:var(--accent);border:3px solid var(--panel);box-shadow:0 0 0 1px var(--accent);transition:transform var(--t)}
+input[type=range]:hover::-webkit-slider-thumb{transform:scale(1.15)}
+input[type=range]::-moz-range-track{height:4px;border-radius:2px;background:var(--border)}
+input[type=range]::-moz-range-progress{height:4px;border-radius:2px;background:var(--accent)}
+input[type=range]::-moz-range-thumb{width:12px;height:12px;border-radius:50%;background:var(--accent);border:3px solid var(--panel)}
+.mscale{display:flex;gap:4px;align-items:flex-end;height:28px;margin-top:12px}
+.mscale i{flex:1;background:var(--border);border-radius:2px;transition:background var(--t)}
+.mscale i.on{background:var(--accent)}
+.mscale i.hi{background:var(--warn)}
+.mscale i.xx{background:var(--danger)}
+.mticks{display:flex;gap:4px;margin-top:4px}
+.mticks span{flex:1;text-align:center;font-size:9.5px;color:var(--muted)}
+select{width:100%;height:38px;background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:0 10px;font:500 13px Inter,sans-serif;letter-spacing:.06em;cursor:pointer;transition:border-color var(--t)}
+select:hover,select:focus{border-color:var(--accent);outline:0}
+.info{width:16px;height:16px;border-radius:50%;border:1px solid var(--muted);color:var(--muted);font-size:10px;display:inline-flex;align-items:center;justify-content:center;cursor:help;font-weight:700}
+.coords{font-size:12px;color:var(--muted);margin-top:10px;display:flex;justify-content:space-between}
+.coords b{color:var(--text);font-weight:600}
+/* ---------- center ---------- */
+.center{display:flex;flex-direction:column;gap:12px;min-width:0;min-height:0}
+.toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.tabs{display:flex;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:3px;gap:2px}
+.tab{height:32px;padding:0 18px;border:0;border-radius:7px;background:transparent;color:var(--muted);font-size:11.5px;font-weight:600;letter-spacing:.12em;cursor:pointer;transition:all var(--t)}
+.tab:hover{color:var(--text)}
+.tab.active{background:rgba(217,164,65,.14);color:var(--accent)}
+.tools{display:flex;gap:10px}
+.stage{flex:1;min-height:0;position:relative;background:#0D131A;border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.stage.selecting{cursor:crosshair}
+.view{position:absolute;inset:0;width:100%;height:100%;opacity:0;transform:scale(1.015);transition:opacity 250ms,transform 250ms;pointer-events:none}
+.view.active{opacity:1;transform:none;pointer-events:auto}
+.view text{font-family:Inter,sans-serif}
+.st{cursor:pointer}
+.ovl{position:absolute;pointer-events:none}
+.banner{top:16px;left:16px;background:rgba(21,29,38,.88);border:1px solid var(--border);border-radius:10px;padding:12px 16px;min-width:250px}
+.banner .b1{font-size:10px;letter-spacing:.22em;color:var(--accent);font-weight:600}
+.banner .b2{font-size:17px;font-weight:700;letter-spacing:.08em;margin:3px 0 6px}
+.banner .b3{font-size:11px;letter-spacing:.12em;color:var(--muted)}
+.banner .b3 b{color:var(--text);font-weight:600}
+.hint{top:16px;left:50%;transform:translate(-50%,-8px);background:var(--accent);color:#0B0F14;font-size:11px;font-weight:700;letter-spacing:.14em;padding:8px 14px;border-radius:8px;opacity:0;transition:all var(--t)}
+.hint.show{opacity:1;transform:translate(-50%,0)}
+.legend{left:16px;bottom:16px;background:rgba(21,29,38,.88);border:1px solid var(--border);border-radius:10px;padding:10px 14px;display:grid;gap:6px;font-size:10.5px;color:var(--muted);letter-spacing:.06em}
+.legend div{display:flex;align-items:center;gap:8px}
+.legend svg{width:18px;height:14px;flex:none}
+.wavechip{right:16px;bottom:16px;background:rgba(21,29,38,.9);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:10px;padding:10px 14px;max-width:280px;opacity:0;transform:translateY(6px);transition:all 250ms}
+.wavechip.show{opacity:1;transform:none}
+.wavechip b{display:block;font-size:12px;letter-spacing:.14em}
+.wavechip span{font-size:11.5px;color:var(--muted)}
+/* station panel */
+.spanel{position:absolute;top:16px;right:16px;width:340px;background:rgba(21,29,38,.96);border:1px solid var(--border);border-radius:12px;padding:16px;opacity:0;transform:translateX(12px);pointer-events:none;transition:all 250ms}
+.spanel.show{opacity:1;transform:none;pointer-events:auto}
+.sp-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px}
+.sp-title{font-size:15px;font-weight:700;letter-spacing:.14em;margin-bottom:6px}
+.x{width:28px;height:28px;border-radius:7px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;transition:all var(--t)}
+.x:hover{color:var(--text);border-color:var(--accent)}
+.sp-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-top:1px solid var(--border);font-size:11px;letter-spacing:.12em;color:var(--muted)}
+.sp-row b{font-weight:600;color:var(--text);letter-spacing:.06em;font-size:12px}
+.sp-chart{margin-top:10px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:6px}
+.sp-chart svg{display:block;width:100%}
+/* chips */
+.chip{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.14em;padding:3px 8px;border-radius:5px;border:1px solid var(--border);color:var(--muted);transition:all var(--t)}
+.chip.ok{color:var(--ok);border-color:rgba(95,174,123,.5);background:rgba(95,174,123,.1)}
+.chip.acc{color:var(--accent);border-color:rgba(217,164,65,.5);background:rgba(217,164,65,.1)}
+.chip.warn{color:var(--warn);border-color:rgba(213,140,69,.5);background:rgba(213,140,69,.1)}
+.chip.dan{color:var(--danger);border-color:rgba(217,92,89,.5);background:rgba(217,92,89,.1)}
+/* ---------- status ---------- */
+.cards{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0 6px}
+.card{background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:12px}
+.card small{display:block;font-size:9.5px;letter-spacing:.18em;color:var(--muted);font-weight:600;margin-bottom:6px}
+.card b{font-size:15px;font-weight:700;letter-spacing:.04em}
+.card b.sm{font-size:12.5px;letter-spacing:.08em}
+.sect{font-size:10.5px;letter-spacing:.18em;color:var(--muted);font-weight:700;margin:20px 0 10px}
+.list{display:grid;gap:6px}
+.lrow{display:flex;justify-content:space-between;align-items:center;background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;letter-spacing:.08em;transition:border-color var(--t)}
+.lrow.click{cursor:pointer}
+.lrow.click:hover{border-color:var(--accent)}
+.lrow em{font-style:normal;color:var(--muted);font-size:10px;margin-left:6px;letter-spacing:.06em}
+table{width:100%;border-collapse:collapse;font-size:11.5px}
+th{font-size:9.5px;letter-spacing:.14em;color:var(--muted);font-weight:600;text-align:right;padding:0 0 6px}
+th:first-child,td:first-child{text-align:left}
+td{padding:6px 0;border-top:1px solid var(--border);text-align:right;color:var(--muted)}
+td.hit{color:var(--text)}
+td:first-child{font-weight:700;color:var(--text)}
+.note{font-size:10.5px;line-height:1.5;color:var(--muted);margin-top:10px}
+/* ---------- timeline ---------- */
+.tl{flex:none;margin:16px;display:grid;grid-template-columns:190px minmax(0,1fr) auto;gap:28px;align-items:center;padding:14px 24px;background:var(--panel);border:1px solid var(--border);border-radius:12px}
+.clock small{display:block;font-size:9.5px;letter-spacing:.2em;color:var(--muted);font-weight:600;margin-bottom:4px}
+.clock b{font-size:30px;font-weight:600;letter-spacing:.02em}
+.track{padding:0 44px;height:62px;cursor:pointer}
+.tw{position:relative;height:100%}
+.rail{position:absolute;left:0;right:0;top:16px;height:4px;background:var(--border);border-radius:2px;overflow:hidden}
+.fill{position:absolute;inset:0;background:var(--accent);transform-origin:left;transform:scaleX(0)}
+.mk{position:absolute;top:9px;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none}
+.mk i{width:10px;height:10px;border-radius:50%;background:var(--panel);border:2px solid var(--muted);transition:all var(--t)}
+.mk span{font-size:9.5px;letter-spacing:.14em;font-weight:600;color:var(--muted);transition:color var(--t)}
+.mk.done i{border-color:var(--accent);background:var(--accent)}
+.mk.done span{color:var(--text)}
+.ph{position:absolute;left:0;top:4px;width:2px;height:28px;background:var(--text);border-radius:1px;box-shadow:0 0 0 3px rgba(241,244,247,.12);will-change:transform}
+.ctrls{display:flex;gap:8px;align-items:center}
+.sep{width:1px;height:24px;background:var(--border);margin:0 6px}
+/* ---------- presentation ---------- */
+.presbar{left:50%;bottom:16px;transform:translateX(-50%);display:none;align-items:center;gap:22px;background:rgba(21,29,38,.95);border:1px solid var(--border);border-radius:12px;padding:14px 18px 14px 22px;pointer-events:auto;min-width:560px}
+.presbar .ps{font-size:10px;letter-spacing:.22em;color:var(--accent);font-weight:700}
+.presbar .pt{font-size:20px;font-weight:700;letter-spacing:.08em;margin:2px 0}
+.presbar .pd{font-size:12.5px;color:var(--muted)}
+.presbar .pb{display:flex;gap:8px;margin-left:auto}
+.prog{display:flex;gap:4px;margin-top:8px}
+.prog i{width:22px;height:3px;border-radius:2px;background:var(--border);transition:background var(--t)}
+.prog i.on{background:var(--accent)}
+body.pres .presbar{display:flex}
+body.pres .left,body.pres .right,body.pres .btn-sim,body.pres .btn-loc,body.pres .drawer-btn{display:none!important}
+body.pres .grid{grid-template-columns:minmax(0,1fr)}
+body.pres .legend{bottom:104px}
+body.pres .wavechip{bottom:104px}
+/* ---------- tooltip / modal ---------- */
+#tip{position:fixed;z-index:100;pointer-events:none;background:#0B0F14;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:11.5px;line-height:1.55;color:var(--muted);max-width:260px;display:none;box-shadow:0 8px 24px rgba(0,0,0,.45)}
+#tip b{display:block;color:var(--text);font-size:11px;letter-spacing:.16em;margin-bottom:2px}
+#tip span{color:var(--text)}
+.modal{position:fixed;inset:0;z-index:90;background:rgba(5,8,11,.72);display:flex;align-items:center;justify-content:center;padding:24px;opacity:0;pointer-events:none;transition:opacity 250ms}
+.modal.show{opacity:1;pointer-events:auto}
+.mbox{background:var(--panel);border:1px solid var(--border);border-radius:12px;width:min(1040px,100%);max-height:100%;overflow:auto;padding:26px;transform:translateY(10px);transition:transform 250ms}
+.modal.show .mbox{transform:none}
+.mhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
+.mhead h2{font-size:14px;letter-spacing:.2em}
+.lgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(236px,1fr));gap:12px}
+.lcard{background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:16px;transition:border-color var(--t)}
+.lcard:hover{border-color:var(--accent)}
+.lcard h3{font-size:11.5px;letter-spacing:.14em;color:var(--accent);margin-bottom:8px}
+.lcard p{font-size:13px;line-height:1.55;color:var(--muted)}
+.lcard p b{color:var(--text);font-weight:600}
+/* ---------- responsive ---------- */
+@media (max-width:1100px){
+  .grid{grid-template-columns:minmax(0,1fr)}
+  .drawer-btn{display:inline-flex;align-items:center}
+  .left,.right{position:fixed;top:64px;bottom:0;width:320px;z-index:60;border-radius:0 12px 12px 0;transform:translateX(-105%)}
+  .right{right:0;left:auto;border-radius:12px 0 0 12px;transform:translateX(105%)}
+  body.dl .left,body.dr .right{transform:none;box-shadow:0 0 0 100vmax rgba(0,0,0,.5)}
+  .tl{grid-template-columns:1fr;gap:12px}
+  .legend{display:none}
+  .live{display:none}
+  .hdr{grid-template-columns:1fr auto}
+}
+@media (max-width:700px){
+  body{overflow-y:auto;height:auto;min-height:100%}
+  .hdr{height:auto;padding:10px 14px;grid-template-columns:1fr;gap:10px}
+  .hdr-actions{flex-wrap:wrap;justify-content:flex-start}
+  .grid{display:flex;flex-direction:column;padding:12px 12px 0}
+  .center{order:-1}
+  .stage{flex:none;height:62vw;min-height:300px}
+  .left,.right{position:static;transform:none;width:auto;border-radius:12px}
+  .drawer-btn{display:none}
+  .spanel{width:calc(100% - 24px);right:12px;top:12px}
+  .banner{display:none}
+  .tl{margin:12px}
+  .ctrls{flex-wrap:wrap}
+  .presbar{min-width:0;width:calc(100% - 24px);flex-wrap:wrap}
+}
+</style>
+</head>
+<body>
+
+<header class="hdr">
+  <div class="brand">
+    <button class="btn sm drawer-btn" id="btnDL">PARÂMETROS</button>
+    <div><h1>EARTHQUAKE LAB</h1><p>SIMULADOR DE ONDAS SÍSMICAS</p></div>
+  </div>
+  <div class="live"><i></i>MODELO SÍSMICO AO VIVO</div>
+  <div class="hdr-actions">
+    <button class="btn sm drawer-btn" id="btnDR">STATUS</button>
+    <button class="btn sm" id="btnLearn">APRENDER</button>
+    <button class="btn sm" id="btnReset">REDEFINIR</button>
+    <button class="btn sm" id="btnPres">MODO APRESENTAÇÃO</button>
+  </div>
+</header>
+
+<main class="grid">
+  <!-- ================= PARAMETERS ================= -->
+  <aside class="panel left" id="paramPanel">
+    <div class="ptitle">PARÂMETROS DO TERREMOTO</div>
+
+    <div class="param">
+      <div class="ptag">PARÂMETRO 01</div>
+      <div class="prow"><span class="pname">MAGNITUDE</span><span class="pval num" id="magVal">Magnitude 6.5</span></div>
+      <input type="range" id="magIn" min="1" max="9" step="0.1" value="6.5" aria-label="Magnitude">
+      <div class="rangeends"><span>1.0</span><span>9.0</span></div>
+      <div class="mscale" id="mscale"></div>
+      <div class="mticks" id="mticks"></div>
+      <div class="pnote" id="magNote"></div>
+    </div>
+
+    <div class="param">
+      <div class="ptag">PARÂMETRO 02</div>
+      <div class="prow"><span class="pname">PROFUNDIDADE</span><span class="pval num" id="depthVal">15 km</span></div>
+      <input type="range" id="depthIn" min="2" max="30" step="1" value="15" aria-label="Depth">
+      <div class="rangeends"><span>RASO</span><span>PROFUNDO</span></div>
+      <div class="pnote" id="depthNote"></div>
+    </div>
+
+    <div class="param">
+      <div class="ptag">PARÂMETRO 03</div>
+      <div class="prow"><span class="pname">EPICENTRO</span></div>
+      <button class="btn" id="btnSelect" style="width:100%">SELECIONAR NO MAPA</button>
+      <div class="coords"><span>POSIÇÃO</span><b class="num" id="epiCoord">—</b></div>
+      <div class="pnote">Ative e clique no mapa para reposicionar o epicentro. Distâncias e tempos são recalculados.</div>
+    </div>
+
+    <div class="param">
+      <div class="ptag">PARÂMETRO 04</div>
+      <div class="prow"><span class="pname">TIPO DE SOLO <span class="info" data-tip="As condições do solo podem influenciar a intensidade com que o movimento sísmico é sentido." data-tipt="TIPO DE SOLO">i</span></span></div>
+      <select id="groundIn" aria-label="Ground type">
+        <option value="bedrock">ROCHA</option>
+        <option value="firm" selected>SOLO FIRME</option>
+        <option value="soft">SOLO MOLE</option>
+      </select>
+      <div class="pnote" id="groundNote"></div>
+    </div>
+  </aside>
+
+  <!-- ================= CENTER ================= -->
+  <section class="center">
+    <div class="toolbar">
+      <div class="tabs" role="tablist">
+        <button class="tab active" id="tabMap" data-view="map" role="tab">VISTA DO MAPA</button>
+        <button class="tab" id="tabXs" data-view="xs" role="tab">CORTE TRANSVERSAL</button>
+      </div>
+      <div class="tools">
+        <button class="btn btn-loc" id="btnLocate" disabled>LOCALIZAR EPICENTRO</button>
+        <button class="btn primary btn-sim" id="btnSim">SIMULAR TERREMOTO</button>
+      </div>
+    </div>
+
+    <div class="stage" id="stage">
+      <svg id="mapSvg" class="view active" viewBox="0 0 1000 560" preserveAspectRatio="xMidYMid meet"></svg>
+      <svg id="xsSvg" class="view" viewBox="0 0 1000 560" preserveAspectRatio="xMidYMid meet"></svg>
+
+      <div class="ovl banner">
+        <div class="b1" id="bPhase">SISTEMA PRONTO</div>
+        <div class="b2" id="bName">AGUARDANDO EVENTO</div>
+        <div class="b3">STATUS: <b id="bStatus">EM ESPERA</b></div>
+      </div>
+      <div class="ovl hint" id="selHint">CLIQUE NO MAPA PARA DEFINIR O EPICENTRO</div>
+      <div class="ovl legend" id="legend"></div>
+      <div class="ovl wavechip" id="waveChip"><b id="wcT"></b><span id="wcD"></span></div>
+
+      <div class="spanel" id="spanel">
+        <div class="sp-head">
+          <div><div class="sp-title" id="spTitle">ESTAÇÃO A</div><span class="chip" id="spState">AGUARDANDO</span></div>
+          <button class="x" id="spClose" aria-label="Close">✕</button>
+        </div>
+        <div class="sp-row"><span>DISTÂNCIA</span><b class="num" id="spDist">—</b></div>
+        <div class="sp-row"><span>ONDA P</span><b class="num" id="spP">—</b></div>
+        <div class="sp-row"><span>ONDA S</span><b class="num" id="spS">—</b></div>
+        <div class="sp-row"><span>ONDA SUPERFICIAL</span><b class="num" id="spL">—</b></div>
+        <div class="sp-chart"><svg id="spSvg" viewBox="0 0 320 140"></svg></div>
+      </div>
+
+      <div class="ovl presbar" id="presBar">
+        <div>
+          <div class="ps" id="psStep">PASSO 00 / 06</div>
+          <div class="pt" id="psTitle">PRONTO</div>
+          <div class="pd" id="psDesc">Pressione PRÓXIMO para iniciar a sequência.</div>
+          <div class="prog" id="psProg"></div>
+        </div>
+        <div class="pb">
+          <button class="btn" id="psBack">← VOLTAR</button>
+          <button class="btn" id="psPlay">INICIAR</button>
+          <button class="btn primary" id="psNext">PRÓXIMO →</button>
+          <button class="btn" id="psExit">SAIR</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= STATUS ================= -->
+  <aside class="panel right" id="statusPanel">
+    <div class="ptitle">STATUS SÍSMICO</div>
+    <div class="cards">
+      <div class="card"><small>MAGNITUDE</small><b class="num" id="cMag">6.5</b></div>
+      <div class="card"><small>PROFUNDIDADE</small><b class="num" id="cDepth">15 km</b></div>
+      <div class="card"><small>EPICENTRO</small><b class="sm" id="cEpi">NÃO LOCALIZADO</b></div>
+      <div class="card"><small>SOLO</small><b class="sm" id="cGround">SOLO FIRME</b></div>
+    </div>
+
+    <div class="sect">STATUS DAS ONDAS</div>
+    <div class="list">
+      <div class="lrow"><span>ONDA P</span><span><em id="cntP"></em><span class="chip" id="stP">AGUARDANDO</span></span></div>
+      <div class="lrow"><span>ONDA S</span><span><em id="cntS"></em><span class="chip" id="stS">AGUARDANDO</span></span></div>
+      <div class="lrow"><span>SUPERFÍCIE</span><span><em id="cntL"></em><span class="chip" id="stL">AGUARDANDO</span></span></div>
+    </div>
+
+    <div class="sect">ESTAÇÕES</div>
+    <div class="list" id="stList"></div>
+
+    <div class="sect">TEMPOS DE CHEGADA (s)</div>
+    <table><thead><tr><th>EST.</th><th>P</th><th>S</th><th>S−P</th></tr></thead><tbody id="arrBody"></tbody></table>
+    <div class="note">A diferença S−P cresce com a distância. É ela que permite estimar quão longe o epicentro está de cada estação.</div>
+  </aside>
+</main>
+
+<footer class="tl">
+  <div class="clock"><small>TEMPO DE SIMULAÇÃO</small><b class="num" id="clock">00:00.00</b></div>
+  <div class="track" id="track"><div class="tw" id="tw">
+    <div class="rail"><div class="fill" id="fill"></div></div>
+    <div class="ph" id="ph"></div>
+  </div></div>
+  <div class="ctrls">
+    <button class="btn sm" id="bPlay">INICIAR</button>
+    <button class="btn sm" id="bPause">PAUSAR</button>
+    <button class="btn sm" id="bRestart">REINICIAR</button>
+    <span class="sep"></span>
+    <button class="btn sm spd on" data-s="1">1×</button>
+    <button class="btn sm spd" data-s="2">2×</button>
+    <button class="btn sm spd" data-s="4">4×</button>
+  </div>
+</footer>
+
+<div id="tip"></div>
+
+<div class="modal" id="learn" aria-hidden="true">
+  <div class="mbox">
+    <div class="mhead"><h2>APRENDER — NOÇÕES DE SISMOLOGIA</h2><button class="x" id="learnClose" aria-label="Close">✕</button></div>
+    <div class="lgrid">
+      <div class="lcard"><h3>O QUE É MAGNITUDE?</h3><p>Mede a <b>energia liberada</b> na fonte do terremoto. Cada +1 de magnitude libera cerca de 32× mais energia.</p></div>
+      <div class="lcard"><h3>O QUE É PROFUNDIDADE?</h3><p>Distância entre a superfície e o ponto onde a ruptura começa. Quanto mais <b>raso</b>, mais forte tende a ser o tremor na superfície.</p></div>
+      <div class="lcard"><h3>O QUE É UM EPICENTRO?</h3><p>O ponto da <b>superfície</b> exatamente acima do hipocentro. É o local que aparece nos mapas.</p></div>
+      <div class="lcard"><h3>O QUE É UM HIPOCENTRO?</h3><p>O ponto <b>dentro da Terra</b> onde a falha começa a romper. Também chamado de foco.</p></div>
+      <div class="lcard"><h3>O QUE SÃO ONDAS P?</h3><p>Ondas <b>primárias</b>, de compressão. São as mais rápidas, chegam primeiro às estações e atravessam sólidos e líquidos.</p></div>
+      <div class="lcard"><h3>O QUE SÃO ONDAS S?</h3><p>Ondas <b>secundárias</b>, de cisalhamento. Chegam depois das P e movem o solo de lado a lado, com mais amplitude.</p></div>
+      <div class="lcard"><h3>POR QUE O SOLO IMPORTA?</h3><p>Solos moles <b>amplificam</b> e prolongam o tremor; rocha firme o reduz. A mesma onda é sentida de formas diferentes.</p></div>
+    </div>
+    <div class="note" style="margin-top:16px">As velocidades e escalas da simulação são visuais e didáticas, não um modelo sismológico profissional.</div>
+  </div>
+</div>
+
+<script>
+(()=>{
+'use strict';
+/* =====================================================================
+   UTILITIES
+   ===================================================================== */
+const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
+const NS='http://www.w3.org/2000/svg';
+const el=(tag,at={},par)=>{const n=document.createElementNS(NS,tag);for(const k in at)n.setAttribute(k,at[k]);if(par)par.appendChild(n);return n;};
+const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+const ss=x=>{x=clamp(x,0,1);return x*x*(3-2*x);};
+const star=(r1,r2,n=5)=>{let s='';for(let i=0;i<n*2;i++){const r=i%2?r2:r1,a=-Math.PI/2+i*Math.PI/n;s+=(r*Math.cos(a)).toFixed(2)+','+(r*Math.sin(a)).toFixed(2)+' ';}return s;};
+const cache=new Map();
+const setText=(e,v)=>{if(cache.get(e)!==v){cache.set(e,v);e.textContent=v;}};
+const setCls=(e,v)=>{if(cache.get(e)!==v){cache.set(e,v);e.className=v;}};
+const setAt=(e,k,v)=>{const key=k;let m=cache.get(e);if(!m){m={};cache.set(e,m);}if(m[key]!==v){m[key]=v;e.setAttribute(k,v);}};
+
+/* =====================================================================
+   CONFIG — constants, stations, scenery
+   ===================================================================== */
+const W=1000,H=560,KM=10;                 // map: 10 px = 1 km  →  100 × 56 km
+const V={p:10.5,s:6.0,l:4.2};             // visual wave speeds (km/s)
+const T0=2;                               // rupture duration (s)
+const LOC_DUR=5.6, LOC_SHOW=4.4;          // epicenter-location animation (s)
+const COL={p:'#D9A441',s:'#D58C45',l:'#D95C59',ok:'#5FAE7B',mut:'#98A4B3',txt:'#F1F4F7'};
+const GROUND={
+  bedrock:{name:'ROCHA',  f:.7, layer:.7,fill:'#4a5560',tint:'rgba(140,150,160,.10)',note:'Rocha rígida: <b>menor amplificação</b> do movimento.'},
+  firm:   {name:'SOLO FIRME',f:1,  layer:2, fill:'#5d4d3a',tint:'rgba(150,115,70,.10)', note:'Solo firme: amplificação <b>intermediária</b>.'},
+  soft:   {name:'SOLO MOLE',f:1.6,layer:4, fill:'#85714a',tint:'rgba(217,164,65,.13)', note:'Solo mole: <b>maior amplificação</b> e tremor mais longo.'}
+};
+const STATIONS=[{id:'A',x:190,y:120},{id:'B',x:860,y:200},{id:'C',x:740,y:500},{id:'D',x:130,y:430}];
+const CITIES=[{n:'Porto Alto',x:300,y:370},{n:'Vila Serra',x:640,y:120},{n:'Campo Verde',x:560,y:440},{n:'São Miguel',x:90,y:250},{n:'Ponta Norte',x:770,y:340}];
+const DEF={mag:6.5,depth:15,ground:'firm',epi:{x:430,y:280}};
+const STEPS=[
+  ['A FALHA SE ROMPE','A energia acumulada é liberada de uma vez no hipocentro.'],
+  ['AS ONDAS P CHEGAM PRIMEIRO','As ondas primárias são as mais rápidas e chegam antes das demais.'],
+  ['AS ONDAS S VÊM EM SEGUIDA','As ondas secundárias vêm logo depois, mais lentas e mais intensas.'],
+  ['AS ONDAS SUPERFICIAIS SE PROPAGAM','Percorrem a superfície e causam o maior movimento do solo.'],
+  ['AS ESTAÇÕES REGISTRAM O EVENTO','Cada estação registra as chegadas em momentos diferentes.'],
+  ['O EPICENTRO É ESTIMADO','Com a diferença S−P, cada estação define um círculo de distância.']
+];
+
+/* =====================================================================
+   SIMULATION ENGINE — pure, deterministic (state = f(parameters, t))
+   ===================================================================== */
+let P={mag:DEF.mag,depth:DEF.depth,ground:DEF.ground,epi:{...DEF.epi}};
+const S={t:0,playing:false,speed:1,stopAt:null,view:'map',selecting:false,locating:false,locT:0,pres:false,step:0,sel:null};
+let M;
+
+function recompute(){
+  const a=(P.mag-1)/8, g=GROUND[P.ground].f, d=P.depth;
+  const depthF=1-.65*(d/30);
+  const ampSurf=(.1+.9*a)*g*depthF*1.1;
+  const recDur=3+5*a;
+  const st=STATIONS.map((s,i)=>{
+    const dx=s.x-P.epi.x, dy=s.y-P.epi.y, dist=Math.hypot(dx,dy)/KM, R=Math.hypot(dist,d);
+    const tp=T0+R/V.p, ts=T0+R/V.s, tl=T0+d/V.s+dist/V.l;
+    return {...s,i,dx,dy,dist,R,tp,ts,tl,tr:tl+recDur,sgn:dx<0?-1:1};
+  });
+  const mk={t0:T0,S0:Math.min(...st.map(s=>s.ts)),L0:Math.min(...st.map(s=>s.tl)),R0:Math.min(...st.map(s=>s.tr)),m4:Math.max(...st.map(s=>s.tr))};
+  mk.end=mk.m4+4;
+  M={a,g,depthF,ampSurf,recDur,st,mk,trail:V.l*recDur*.6};
+  M.ends=[mk.t0,mk.S0,mk.L0,mk.R0,mk.m4];
+}
+
+/* ---- wavePropagation ---- */
+const bodyR=(type,t)=>Math.max(0,V[type]*(t-T0));                       // radius from hypocenter (km)
+const surfR=(type,t)=>{                                                  // radius on the surface (km)
+  if(type==='l') return Math.max(0,V.l*(t-T0-P.depth/V.s));
+  const rb=bodyR(type,t); return rb>P.depth?Math.sqrt(rb*rb-P.depth*P.depth):0;
+};
+const fade=r=>.25+.75*Math.exp(-r/(30+100*M.a));
+function shake(dist,t){                                                  // small surface vibration
+  const rL=surfR('l',t); if(rL<=0) return [0,0];
+  const u=rL-dist; if(u<0||u>M.trail) return [0,0];
+  const env=(1-u/M.trail)*Math.min(1,u/1.5);
+  const A=Math.min(3.4,.5+2.4*M.ampSurf)*env, ph=t*18-dist*1.3;
+  return [A*Math.sin(ph)*.7, A*Math.cos(ph)*.5];
+}
+
+/* ---- stationDetection ---- */
+function stState(s,t){
+  const p=t>=s.tp, sw=t>=s.ts, l=t>=s.tl, rec=t>=s.tr;
+  return {p,s:sw,l,rec,state:rec?'RECORDED':(p?'DETECTING':'WAITING')};
+}
+const phaseOf=t=>{const k=M.mk;if(t<=0&&!S.playing)return 0;if(t<k.t0)return 1;if(t<k.S0)return 2;if(t<k.L0)return 3;if(t<k.R0)return 4;if(t<k.m4)return 5;return 6;};
+const stepFromTime=t=>{if(S.locating)return 6;const i=M.ends.findIndex(e=>t<=e+1e-6);return i<0?5:i+1;};
+
+/* ---- seismogram (deterministic) ---- */
+const env=(d,rise,dur)=>(1-Math.exp(-d/rise))*Math.exp(-d/(dur*.5));
+function sig(s,tau){
+  const att=1/(1+s.R/45), base=(.08+.92*M.a*M.a)*2.2*att, g=M.g;
+  let v=0,d=tau-s.tp;
+  if(d>0) v+=.22*base*env(d,.15,1.6)*Math.sin(d*6.283*3);
+  d=tau-s.ts;
+  if(d>0) v+=.55*base*g*env(d,.3,3)*Math.sin(d*6.283*1.9+1.3);
+  d=tau-s.tl;
+  if(d>0) v+=M.ampSurf*att*2.2*env(d,.9,M.recDur)*(Math.sin(d*6.283*1.0)+.35*Math.sin(d*6.283*1.7+.8));
+  v+=.012*(Math.sin(tau*37+s.i*1.7)+.7*Math.sin(tau*91.3+s.i));
+  return Math.tanh(v);
+}
+
+/* ---- epicenter location (S−P → distance circles → least squares) ---- */
+function estimate(){
+  const k=V.p*V.s/(V.p-V.s);
+  const c=M.st.map(s=>{const Rr=(s.ts-s.tp)*k;return {x:s.x/KM,y:s.y/KM,r:Math.sqrt(Math.max(0,Rr*Rr-P.depth*P.depth))};});
+  let a11=0,a12=0,a22=0,b1=0,b2=0;
+  for(let i=1;i<c.length;i++){
+    const ax=2*(c[i].x-c[0].x), ay=2*(c[i].y-c[0].y);
+    const b=c[0].r**2-c[i].r**2+c[i].x**2-c[0].x**2+c[i].y**2-c[0].y**2;
+    a11+=ax*ax;a12+=ax*ay;a22+=ay*ay;b1+=ax*b;b2+=ay*b;
+  }
+  const det=a11*a22-a12*a12||1e-9;
+  return {circles:c,x:(b1*a22-b2*a12)/det*KM,y:(a11*b2-a12*b1)/det*KM};
+}
+
+/* =====================================================================
+   VISUALIZATION — MAP
+   ===================================================================== */
+const stage=$('#stage'), mapSvg=$('#mapSvg'), xsSvg=$('#xsSvg');
+let U=1; const unit=()=>{U=Math.max(1,Math.min(stage.clientWidth/W,stage.clientHeight/H));};
+const MP={};   // map element refs
+
+function buildMap(){
+  const g=mapSvg; g.innerHTML='';
+  el('rect',{x:0,y:0,width:W,height:H,fill:'#0c1219'},g);
+  MP.land=el('path',{d:'M0,0H1000V400C960,430 930,500 880,540L860,560H0Z',fill:'#17212b',stroke:'#27313C','stroke-width':1.5},g);
+  MP.tint=el('path',{d:'M0,0H1000V400C960,430 930,500 880,540L860,560H0Z',fill:'transparent'},g);
+  el('path',{d:'M1000,400C960,430 930,500 880,540L860,560H1000Z',fill:'#0f1822',opacity:.9},g);
+  // contour lines + river (decorative)
+  [[320,230,260,150],[320,230,200,110],[320,230,140,70],[700,420,200,90],[700,420,120,50]].forEach(c=>el('ellipse',{cx:c[0],cy:c[1],rx:c[2],ry:c[3],fill:'none',stroke:'#202c38','stroke-width':1,transform:`rotate(-18 ${c[0]} ${c[1]})`},g));
+  el('path',{d:'M610,0C590,70 650,120 620,200S540,310 600,380S700,470 760,560',fill:'none',stroke:'#1d3345','stroke-width':3,opacity:.8},g);
+  // km grid
+  for(let i=1;i<10;i++){
+    el('line',{x1:i*100,y1:0,x2:i*100,y2:H,stroke:'#fff','stroke-opacity':.045},g);
+    const t=el('text',{x:i*100,y:H-6,'text-anchor':'middle',fill:COL.mut,'font-size':10,opacity:.55},g);t.textContent=i*10;
+  }
+  for(let i=1;i<6;i++){
+    el('line',{x1:0,y1:i*100,x2:W,y2:i*100,stroke:'#fff','stroke-opacity':.045},g);
+    const t=el('text',{x:6,y:i*100-4,fill:COL.mut,'font-size':10,opacity:.55},g);t.textContent=i*10;
+  }
+  const kt=el('text',{x:W-12,y:20,'text-anchor':'end',fill:COL.mut,'font-size':10,opacity:.6,'letter-spacing':2},g);kt.textContent='ESCALA · GRADE 10 km';
+  // fault trace through epicenter
+  MP.fault=el('line',{stroke:COL.l,'stroke-width':1.5,'stroke-dasharray':'8 6',opacity:.45},g);
+  MP.faultT=el('text',{fill:COL.l,'font-size':10,'letter-spacing':2,opacity:.7},g);MP.faultT.textContent='TRAÇO DA FALHA';
+  MP.dl=el('g',{},g);
+  MP.stG=[];MP.ctG=[];
+  // cities
+  MP.cities=CITIES.map(c=>{
+    const gg=el('g',{transform:`translate(${c.x} ${c.y})`},g), sh=el('g',{},gg);
+    el('rect',{x:-3.5,y:-3.5,width:7,height:7,fill:'#5b6877',transform:'rotate(45)'},sh);
+    const t=el('text',{x:9,y:4,fill:COL.mut,'font-size':10.5,opacity:.85},sh);t.textContent=c.n;
+    c.dist=0;return {c,sh};
+  });
+  el('clipPath',{id:'mclip'},el('defs',{},g)).appendChild(el('rect',{x:0,y:0,width:W,height:H}));
+  const wv=el('g',{'clip-path':'url(#mclip)'},g);
+  // locate layer (below waves)
+  MP.loc=STATIONS.map(()=>el('circle',{r:100,cx:0,cy:0,fill:'rgba(95,174,123,.06)',stroke:COL.ok,'stroke-width':2,'vector-effect':'non-scaling-stroke',opacity:0},wv));
+  // waves group at epicenter
+  MP.epi=el('g',{},wv);
+  MP.pulse=el('circle',{r:100,fill:'none',stroke:COL.p,'vector-effect':'non-scaling-stroke',opacity:0},MP.epi);
+  MP.P=el('circle',{r:100,fill:'none',stroke:COL.p,'vector-effect':'non-scaling-stroke',opacity:0},MP.epi);
+  MP.S=el('circle',{r:100,fill:'none',stroke:COL.s,'vector-effect':'non-scaling-stroke',opacity:0},MP.epi);
+  MP.Lb=el('circle',{r:100,fill:'none',stroke:COL.l,'vector-effect':'non-scaling-stroke',opacity:0},MP.epi);
+  MP.L=[0,1,2].map(()=>el('circle',{r:100,fill:'none',stroke:COL.l,'vector-effect':'non-scaling-stroke',opacity:0},MP.epi));
+  // wave labels
+  MP.lab={};
+  [['p','ONDA P',COL.p],['s','ONDA S',COL.s],['l','ONDA SUPERFICIAL',COL.l]].forEach(([k,n,c])=>{
+    const t=el('text',{fill:c,'font-size':11,'font-weight':700,'letter-spacing':2,opacity:0},g);t.textContent=n;MP.lab[k]=t;
+  });
+  // stations
+  MP.st=STATIONS.map((s,i)=>{
+    const gg=el('g',{class:'st',transform:`translate(${s.x} ${s.y})`},g), sh=el('g',{},gg);
+    const ping=el('circle',{r:100,fill:'none',stroke:COL.ok,'vector-effect':'non-scaling-stroke','stroke-width':1.5,opacity:0},sh);
+    const tri=el('polygon',{points:'0,-9 8.5,6 -8.5,6',fill:COL.mut,stroke:'#0B0F14','stroke-width':1.5},sh);
+    const lt=el('text',{y:19,'text-anchor':'middle',fill:COL.txt,'font-size':11,'font-weight':700},sh);lt.textContent=s.id;
+    const lb=el('text',{y:4,fill:COL.mut,'font-size':10.5},sh);
+    el('circle',{r:20,fill:'transparent'},gg);
+    gg.addEventListener('mouseenter',e=>showTip(()=>stTip(i),e));
+    gg.addEventListener('mousemove',moveTip);gg.addEventListener('mouseleave',hideTip);
+    gg.addEventListener('click',e=>{e.stopPropagation();openStation(s.id);});
+    return {gg,sh,ping,tri,lb};
+  });
+  // found marker
+  MP.found=el('g',{opacity:0},g);
+  MP.foundRing=el('circle',{r:100,fill:'none',stroke:COL.ok,'stroke-width':2,'vector-effect':'non-scaling-stroke'},MP.found);
+  el('polygon',{points:star(15,6.5),fill:COL.ok,stroke:'#0B0F14','stroke-width':1.5},MP.found);
+  const ft=el('text',{x:20,y:-6,fill:COL.ok,'font-size':11.5,'font-weight':700,'letter-spacing':1.5},MP.found);ft.textContent='★ EPICENTRO LOCALIZADO';
+  const fs=el('text',{x:20,y:9,fill:COL.mut,'font-size':10.5},MP.found);fs.textContent='Epicentro estimado';
+  // epicenter marker on top
+  MP.mark=el('g',{},g);
+  MP.halo=el('circle',{r:16,fill:'none',stroke:COL.p,'stroke-width':1,opacity:.5},MP.mark);
+  MP.star=el('polygon',{points:star(12,5.2),fill:COL.p,stroke:'#0B0F14','stroke-width':1.5},MP.mark);
+  const hit=el('circle',{r:22,fill:'transparent'},MP.mark);
+  hit.addEventListener('mouseenter',e=>showTip(()=>'<b>EPICENTRO</b>Local da superfície diretamente acima do hipocentro.',e));
+  hit.addEventListener('mousemove',moveTip);hit.addEventListener('mouseleave',hideTip);
+  // ghost for epicenter selection
+  MP.ghost=el('g',{opacity:0,'pointer-events':'none'},g);
+  el('circle',{r:13,fill:'none',stroke:COL.p,'stroke-dasharray':'3 3','stroke-width':1.5},MP.ghost);
+  el('line',{x1:-20,x2:20,stroke:COL.p,'stroke-width':1,opacity:.6},MP.ghost);el('line',{y1:-20,y2:20,stroke:COL.p,'stroke-width':1,opacity:.6},MP.ghost);
+  // frame
+  el('rect',{x:.5,y:.5,width:W-1,height:H-1,fill:'none',stroke:'#27313C'},g);
+
+  mapSvg.addEventListener('mousemove',e=>{
+    if(!S.selecting) return;const p=svgPt(mapSvg,e);
+    MP.ghost.setAttribute('transform',`translate(${p.x} ${p.y})`);MP.ghost.setAttribute('opacity',1);
+  });
+  mapSvg.addEventListener('mouseleave',()=>MP.ghost.setAttribute('opacity',0));
+  mapSvg.addEventListener('click',e=>{
+    if(!S.selecting) return;const p=svgPt(mapSvg,e);
+    P.epi={x:Math.round(clamp(p.x,30,W-30)),y:Math.round(clamp(p.y,30,H-30))};
+    S.selecting=false;MP.ghost.setAttribute('opacity',0);
+    onGeometryChange();syncParams();
+  });
+}
+function svgPt(svg,e){const pt=svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;return pt.matrixTransform(svg.getScreenCTM().inverse());}
+
+function layoutMap(){
+  const {x,y}=P.epi;
+  MP.epi.setAttribute('transform',`translate(${x} ${y})`);
+  MP.mark.setAttribute('transform',`translate(${x} ${y})`);
+  // fault trace: line through epicenter, 62° from horizontal
+  const ang=-62*Math.PI/180, dx=Math.cos(ang), dy=Math.sin(ang);
+  let tmin=-1e9,tmax=1e9;
+  [[dx,x,0,W],[dy,y,0,H]].forEach(([d,o,lo,hi])=>{if(Math.abs(d)>1e-6){const a=(lo-o)/d,b=(hi-o)/d;tmin=Math.max(tmin,Math.min(a,b));tmax=Math.min(tmax,Math.max(a,b));}});
+  MP.fault.setAttribute('x1',x+dx*tmin);MP.fault.setAttribute('y1',y+dy*tmin);
+  MP.fault.setAttribute('x2',x+dx*tmax);MP.fault.setAttribute('y2',y+dy*tmax);
+  MP.faultT.setAttribute('x',x+dx*tmax*.62+8);MP.faultT.setAttribute('y',y+dy*tmax*.62);
+  // station-distance lines + labels
+  MP.dl.innerHTML='';
+  M.st.forEach((s,i)=>{
+    el('line',{x1:x,y1:y,x2:s.x,y2:s.y,stroke:COL.mut,'stroke-opacity':.22,'stroke-dasharray':'3 5'},MP.dl);
+    const ms=MP.st[i], right=s.x<700;
+    ms.lb.textContent=`${s.dist.toFixed(1)} km`;
+    ms.lb.setAttribute('x',right?13:-13);ms.lb.setAttribute('text-anchor',right?'start':'end');
+  });
+  MP.cities.forEach(o=>{o.c.dist=Math.hypot(o.c.x-x,o.c.y-y)/KM;});
+  setAt(MP.tint,'fill',GROUND[P.ground].tint);
+}
+
+function renderMap(t){
+  const k=M.mk, a=M.a, A=M.ampSurf, dep=P.depth;
+  const [ex,ey]=[P.epi.x,P.epi.y];
+  // rupture marker blink + pulse
+  const rup=t<T0+.4 && (t>0||S.playing);
+  setAt(MP.star,'opacity',(t>0&&t<T0)?(.35+.65*(.5+.5*Math.sin(t*14))).toFixed(2):1);
+  let pk=0,po=0;
+  if(t>0&&t<T0+1){const ph=ss(t/(T0+1));pk=ph*(2+3*a)*KM/100;po=(1-ph)*.9;}
+  setAt(MP.pulse,'transform',`scale(${pk.toFixed(4)})`);setAt(MP.pulse,'opacity',po.toFixed(3));setAt(MP.pulse,'stroke-width',(1.5*U).toFixed(2));
+  // waves
+  const rp=surfR('p',t), rs=surfR('s',t), rl=surfR('l',t);
+  waveRing(MP.P,rp,.95,(1.3+1.2*a)*U);
+  waveRing(MP.S,rs,.9,(2.6+2.6*a)*U);
+  // surface: lead + trailing rings + soft band
+  waveRing(MP.Lb,rl,.16,(10+12*A)*U);
+  [[0,.95,2.4],[3.5,.55,1.8],[7,.3,1.4]].forEach(([off,op,w],i)=>waveRing(MP.L[i],rl-off,op,w*U*(.8+.4*A),rl));
+  // labels
+  [['p',rp,-52],['s',rs,-33],['l',rl,-14]].forEach(([n,r,deg])=>{
+    const tx=ex+Math.cos(deg*Math.PI/180)*r*KM+8, ty=ey+Math.sin(deg*Math.PI/180)*r*KM;
+    const vis=r>2&&tx>10&&tx<W-90&&ty>14&&ty<H-14;
+    MP.lab[n].setAttribute('opacity',vis?(.95*fade(r)+.05).toFixed(2):0);
+    if(vis){MP.lab[n].setAttribute('x',tx.toFixed(1));MP.lab[n].setAttribute('y',ty.toFixed(1));}
+  });
+  // stations
+  M.st.forEach((s,i)=>{
+    const ms=MP.st[i], q=stState(s,t), [dx,dy]=shake(s.dist,t);
+    ms.sh.setAttribute('transform',`translate(${dx.toFixed(2)} ${dy.toFixed(2)})`);
+    const c=q.rec?COL.ok:(q.p?COL.s:COL.mut);
+    setAt(ms.tri,'fill',c);
+    const since=t-s.tp;
+    if(since>=0&&since<1.2){setAt(ms.ping,'transform',`scale(${(.1+ss(since/1.2)*.28).toFixed(3)})`);setAt(ms.ping,'opacity',(1-since/1.2).toFixed(2));setAt(ms.ping,'stroke',COL.s);}
+    else setAt(ms.ping,'opacity',0);
+  });
+  M.st.forEach(()=>0);
+  MP.cities.forEach(o=>{const [dx,dy]=shake(o.c.dist,t);o.sh.setAttribute('transform',`translate(${dx.toFixed(2)} ${dy.toFixed(2)})`);});
+  // locate
+  const est=S.locating?estimate():null;
+  MP.loc.forEach((c,i)=>{
+    if(!S.locating){setAt(c,'opacity',0);return;}
+    const pr=ss((S.locT-i*1)/.9), r=est.circles[i].r*KM*pr/100;
+    c.setAttribute('transform',`translate(${M.st[i].x} ${M.st[i].y}) scale(${r.toFixed(4)})`);
+    setAt(c,'opacity',pr>0?.95:0);setAt(c,'stroke-width',(2*U).toFixed(2));
+  });
+  if(S.locating&&S.locT>=LOC_SHOW){
+    const pr=ss((S.locT-LOC_SHOW)/.5);
+    MP.found.setAttribute('transform',`translate(${est.x.toFixed(1)} ${est.y.toFixed(1)})`);
+    MP.found.setAttribute('opacity',pr.toFixed(2));
+    const pk2=(S.locT*1.4)%1;
+    MP.foundRing.setAttribute('transform',`scale(${(.12+pk2*.2).toFixed(3)})`);MP.foundRing.setAttribute('opacity',(1-pk2).toFixed(2));
+  } else MP.found.setAttribute('opacity',0);
+}
+function waveRing(node,r,op,sw,fadeR){
+  if(r<=.05){setAt(node,'opacity',0);return;}
+  const fr=fadeR===undefined?r:fadeR;
+  node.setAttribute('transform',`scale(${(r*KM/100).toFixed(4)})`);
+  setAt(node,'stroke-width',sw.toFixed(2));
+  node.setAttribute('opacity',(op*fade(fr)*Math.min(1,r/1.5)).toFixed(3));
+}
+
+/* =====================================================================
+   VISUALIZATION — CROSS SECTION
+   ===================================================================== */
+const XS={SY:100,hx:500,s:10,dip:68*Math.PI/180,BOT:545};
+const X={};
+function buildXS(){
+  const g=xsSvg;g.innerHTML='';
+  const defs=el('defs',{},g);
+  const gc=el('clipPath',{id:'gclip'},defs);el('rect',{x:0,y:XS.SY,width:W,height:XS.BOT-XS.SY},gc);
+  X.clipL=el('polygon',{},el('clipPath',{id:'clipL'},defs));
+  X.clipR=el('polygon',{},el('clipPath',{id:'clipR'},defs));
+  const grad=el('linearGradient',{id:'skyg',x1:0,y1:0,x2:0,y2:1},defs);
+  el('stop',{offset:0,'stop-color':'#0D131A'},grad);el('stop',{offset:1,'stop-color':'#111a24'},grad);
+  el('rect',{x:0,y:0,width:W,height:H,fill:'url(#skyg)'},g);
+  // blocks
+  const mkBlock=(clip)=>{
+    const grp=el('g',{},g), cg=el('g',{'clip-path':`url(#${clip})`},grp);
+    const poly=el('polygon',{fill:'#18212b'},cg);
+    const strata=[5,12,21,27].map(d=>el('line',{x1:0,x2:W,stroke:'#fff','stroke-opacity':.05,'stroke-width':1.5},cg));
+    const soil=el('rect',{x:-20,width:W+40,fill:'#5d4d3a',opacity:.9},cg);
+    const topl=el('line',{x1:0,x2:W,stroke:'#33414f','stroke-width':1},cg);
+    return {grp,poly,strata,soil,topl};
+  };
+  X.bL=mkBlock('clipL');X.bR=mkBlock('clipR');
+  X.fault=el('path',{fill:'none',stroke:COL.l,'stroke-width':2,'stroke-dasharray':'2 0',opacity:.9},g);
+  X.faultT=el('text',{fill:COL.l,'font-size':11,'font-weight':700,'letter-spacing':2.5},g);X.faultT.textContent='FALHA';
+  // depth scale
+  X.scale=el('g',{},g);
+  // waves
+  X.wg=el('g',{'clip-path':'url(#gclip)'},g);
+  X.pulse=[0,1].map(()=>el('circle',{r:100,fill:'none',stroke:COL.p,'vector-effect':'non-scaling-stroke',opacity:0},X.wg));
+  X.P=el('circle',{r:100,fill:'none',stroke:COL.p,'vector-effect':'non-scaling-stroke',opacity:0},X.wg);
+  X.S=el('circle',{r:100,fill:'none',stroke:COL.s,'vector-effect':'non-scaling-stroke',opacity:0},X.wg);
+  // surface line (wave displaced)
+  X.surfBase=el('path',{fill:'none',stroke:'#4a5b6c','stroke-width':2},g);
+  X.surf=el('path',{fill:'none',stroke:COL.l,'stroke-width':2.5,opacity:0},g);
+  // epicenter / hypocenter
+  X.epiL=el('line',{stroke:COL.mut,'stroke-dasharray':'4 5','stroke-opacity':.55},g);
+  X.depthT=el('text',{fill:COL.mut,'font-size':11.5,'font-weight':600},g);
+  X.epi=el('g',{},g);
+  el('polygon',{points:star(11,4.8),fill:COL.p,stroke:'#0B0F14','stroke-width':1.5},X.epi);
+  const et=el('text',{y:-18,'text-anchor':'middle',fill:COL.p,'font-size':11,'font-weight':700,'letter-spacing':2},X.epi);et.textContent='EPICENTRO';
+  const eh=el('circle',{r:20,fill:'transparent'},X.epi);
+  eh.addEventListener('mouseenter',e=>showTip(()=>'<b>EPICENTRO</b>Local da superfície diretamente acima do hipocentro.',e));
+  eh.addEventListener('mousemove',moveTip);eh.addEventListener('mouseleave',hideTip);
+  X.hyp=el('g',{},g);
+  X.halo=el('circle',{r:14,fill:'none',stroke:COL.p,'stroke-width':1,opacity:.5},X.hyp);
+  X.hstar=el('polygon',{points:star(13,5.6),fill:COL.p,stroke:'#0B0F14','stroke-width':1.5},X.hyp);
+  const ht=el('text',{x:20,y:4,fill:COL.p,'font-size':11,'font-weight':700,'letter-spacing':2},X.hyp);ht.textContent='HIPOCENTRO';
+  const hh=el('circle',{r:20,fill:'transparent'},X.hyp);
+  hh.addEventListener('mouseenter',e=>showTip(()=>`<b>HIPOCENTRO</b>Ponto no interior da Terra onde a ruptura começa. Profundidade: <span>${P.depth} km</span>.`,e));
+  hh.addEventListener('mousemove',moveTip);hh.addEventListener('mouseleave',hideTip);
+  el('text',{x:W-14,y:XS.SY-12,'text-anchor':'end',fill:COL.mut,'font-size':11,'font-weight':700,'letter-spacing':3},g).textContent='SUPERFÍCIE';
+  // stations
+  X.st=STATIONS.map((s,i)=>{
+    const gg=el('g',{class:'st'},g), sh=el('g',{},gg);
+    const ping=el('circle',{r:100,fill:'none',stroke:COL.s,'vector-effect':'non-scaling-stroke','stroke-width':1.5,opacity:0},sh);
+    const tri=el('polygon',{points:'0,-1 8.5,-15 -8.5,-15',fill:COL.mut,stroke:'#0B0F14','stroke-width':1.5},sh);
+    const o=(i%2)*30;
+    const lt=el('text',{y:-22-o,'text-anchor':'middle',fill:COL.txt,'font-size':11,'font-weight':700},sh);lt.textContent=`ESTAÇÃO ${s.id}`;
+    const lb=el('text',{y:-36-o,'text-anchor':'middle',fill:COL.mut,'font-size':10.5},sh);
+    el('rect',{x:-24,y:-44-o,width:48,height:48+o,fill:'transparent'},gg);
+    gg.addEventListener('mouseenter',e=>showTip(()=>stTip(i),e));gg.addEventListener('mousemove',moveTip);gg.addEventListener('mouseleave',hideTip);
+    gg.addEventListener('click',()=>openStation(s.id));
+    return {gg,sh,ping,tri,lb,x:0};
+  });
+  el('rect',{x:.5,y:.5,width:W-1,height:H-1,fill:'none',stroke:'#27313C'},g);
+}
+
+function layoutXS(){
+  const {SY,BOT}=XS, dep=P.depth;
+  const maxD=Math.max(...M.st.map(s=>s.dist),1);
+  XS.s=clamp(440/(maxD+3),4.5,10);
+  XS.hy=SY+dep*XS.s;
+  const xf=y=>XS.hx+(y-XS.hy)/Math.tan(XS.dip)+3*Math.sin(y*.05)+2*Math.sin(y*.131+1);
+  XS.xf=xf;
+  const pts=[];for(let y=SY;y<BOT;y+=20)pts.push([xf(y),y]);pts.push([xf(BOT),BOT]);
+  const ps=pts.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ');
+  const pl=`0,${SY} ${ps} 0,${BOT}`, pr=`${ps} ${W},${BOT} ${W},${SY}`;
+  [X.clipL,X.bL.poly].forEach(n=>n.setAttribute('points',pl));
+  [X.clipR,X.bR.poly].forEach(n=>n.setAttribute('points',pr));
+  X.fault.setAttribute('d','M'+ps.replace(/ /g,' L'));
+  X.faultT.setAttribute('x',xf(BOT-30)+12);X.faultT.setAttribute('y',BOT-24);
+  const G=GROUND[P.ground];
+  [X.bL,X.bR].forEach(b=>{
+    b.soil.setAttribute('y',SY);b.soil.setAttribute('height',G.layer*XS.s);b.soil.setAttribute('fill',G.fill);
+    [5,12,21,27].forEach((d,i)=>{b.strata[i].setAttribute('y1',SY+d*XS.s);b.strata[i].setAttribute('y2',SY+d*XS.s);});
+    b.topl.setAttribute('y1',SY);b.topl.setAttribute('y2',SY);
+  });
+  // depth scale
+  X.scale.innerHTML='';
+  const h=el('text',{x:14,y:SY-28,fill:COL.mut,'font-size':10,'font-weight':700,'letter-spacing':2.5},X.scale);h.textContent='ESCALA DE PROFUNDIDADE';
+  for(let d=0;d<=30;d+=10){
+    const y=SY+d*XS.s;
+    el('line',{x1:58,x2:W-8,y1:y,y2:y,stroke:'#fff','stroke-opacity':d?.1:0,'stroke-dasharray':'2 6'},X.scale);
+    el('line',{x1:50,x2:58,y1:y,y2:y,stroke:COL.mut},X.scale);
+    const t=el('text',{x:44,y:y+4,'text-anchor':'end',fill:COL.mut,'font-size':11,'font-weight':600},X.scale);t.textContent=`${d} km`;
+  }
+  el('line',{x1:58,x2:58,y1:SY,y2:SY+30*XS.s,stroke:COL.mut,'stroke-opacity':.6},X.scale);
+  // epicenter / hypocenter
+  X.epi.setAttribute('transform',`translate(${XS.hx} ${SY})`);
+  X.hyp.setAttribute('transform',`translate(${XS.hx} ${XS.hy})`);
+  X.epiL.setAttribute('x1',XS.hx);X.epiL.setAttribute('x2',XS.hx);X.epiL.setAttribute('y1',SY+8);X.epiL.setAttribute('y2',XS.hy-14);
+  X.depthT.setAttribute('x',XS.hx+10);X.depthT.setAttribute('y',SY+(XS.hy-SY)/2);X.depthT.textContent=`${dep} km`;
+  // stations
+  M.st.forEach((s,i)=>{
+    const raw=XS.hx+s.sgn*s.dist*XS.s, x=clamp(raw,70,W-50);
+    X.st[i].x=x;X.st[i].gg.setAttribute('transform',`translate(${x.toFixed(1)} ${SY})`);
+    X.st[i].lb.textContent=`${s.dist.toFixed(1)} km`;
+  });
+}
+
+function renderXS(t){
+  const {SY,hx,hy,s}=XS, a=M.a, A=M.ampSurf, k=M.mk;
+  // fault displacement (reverse fault, hanging wall moves up-dip)
+  const prog=ss(t/T0), D=(3+9*a)*prog*(1+(t<T0?.12*Math.sin(t*40):0));
+  const dx=-Math.cos(XS.dip)*D, dy=-Math.sin(XS.dip)*D;
+  X.bR.grp.setAttribute('transform',`translate(${dx.toFixed(2)} ${dy.toFixed(2)})`);
+  // hypocenter blink + pulses
+  setAt(X.hstar,'opacity',(t>0&&t<T0)?(.3+.7*(.5+.5*Math.sin(t*14))).toFixed(2):1);
+  X.pulse.forEach((c,i)=>{
+    const ph=t/T0-i*.4;
+    if(t>0&&ph>0&&ph<1){c.setAttribute('transform',`translate(${hx} ${hy}) scale(${(ph*4*s/100).toFixed(4)})`);c.setAttribute('opacity',(1-ph).toFixed(2));c.setAttribute('stroke-width',(1.6*U).toFixed(2));}
+    else c.setAttribute('opacity',0);
+  });
+  // body waves
+  const rbP=bodyR('p',t), rbS=bodyR('s',t);
+  const ring=(n,rb,op,w)=>{
+    if(rb<=.05){setAt(n,'opacity',0);return;}
+    n.setAttribute('transform',`translate(${hx} ${hy}) scale(${(rb*s/100).toFixed(4)})`);
+    setAt(n,'stroke-width',w.toFixed(2));
+    n.setAttribute('opacity',(op*fade(rb)*Math.min(1,rb/1.5)).toFixed(3));
+  };
+  ring(X.P,rbP,.95,(1.3+1.2*a)*U);ring(X.S,rbS,.9,(2.6+2.6*a)*U);
+  // surface line with surface wave + scarp
+  const rL=surfR('l',t), ampPx=2+7*Math.min(1,A/1.2), lift=Math.sin(XS.dip)*D, xf0=XS.xf(SY);
+  let d='',base='';
+  for(let x=0;x<=W;x+=6){
+    const dk=Math.abs(x-hx)/s, u=rL-dk;
+    let y=SY;
+    if(rL>0&&u>=0&&u<=M.trail){const q=u/M.trail;y-=ampPx*(1-q)*Math.min(1,u/1.5)*Math.sin(6.283*u/7);}
+    if(x>xf0) y-=lift;
+    d+=(x?'L':'M')+x+','+y.toFixed(2);
+    if(!x) base='M0,'+SY;
+  }
+  X.surf.setAttribute('d',d);X.surfBase.setAttribute('d',d);
+  setAt(X.surf,'opacity',rL>0&&rL<(W/s)+M.trail?.9:0);
+  // stations
+  M.st.forEach((st,i)=>{
+    const xs=X.st[i], q=stState(st,t), [sx,sy]=shake(st.dist,t);
+    xs.sh.setAttribute('transform',`translate(${sx.toFixed(2)} ${(sy*.8).toFixed(2)})`);
+    setAt(xs.tri,'fill',q.rec?COL.ok:(q.p?COL.s:COL.mut));
+    const since=t-st.tp;
+    if(since>=0&&since<1.2){xs.ping.setAttribute('transform',`translate(0 -8) scale(${(.1+ss(since/1.2)*.25).toFixed(3)})`);xs.ping.setAttribute('opacity',(1-since/1.2).toFixed(2));}
+    else setAt(xs.ping,'opacity',0);
+  });
+}
+
+/* =====================================================================
+   STATUS PANEL, BANNER, TIMELINE, STATION PANEL
+   ===================================================================== */
+const E={};
+['cMag','cDepth','cEpi','cGround','cntP','cntS','cntL','stP','stS','stL','stList','arrBody','bPhase','bName','bStatus','waveChip','wcT','wcD',
+ 'clock','fill','ph','track','tw','spanel','spTitle','spState','spDist','spP','spS','spL','spSvg','psStep','psTitle','psDesc','psProg','psPlay','selHint'].forEach(id=>E[id]=document.getElementById(id));
+
+const stTip=i=>{const s=M.st[i],q=stState(s,S.t);return `<b>ESTAÇÃO ${s.id}</b>Distância: <span>${s.dist.toFixed(1)} km</span><br>Status: <span>${q.state==='RECORDED'?'Registrado':q.state==='DETECTING'?'Detectando':'Aguardando'}</span>`;};
+
+function buildStatus(){
+  E.stList.innerHTML=STATIONS.map(s=>`<div class="lrow click" data-st="${s.id}"><span>${s.id}</span><span class="chip" id="sc${s.id}">AGUARDANDO</span></div>`).join('');
+  $$('[data-st]',E.stList).forEach(r=>r.addEventListener('click',()=>openStation(r.dataset.st)));
+  E.arrBody.innerHTML=STATIONS.map(s=>`<tr><td>${s.id}</td><td class="num" id="ap${s.id}">—</td><td class="num" id="as${s.id}">—</td><td class="num" id="ad${s.id}">—</td></tr>`).join('');
+}
+function waveChip(txt,cls){return [txt,cls];}
+
+function renderStatus(t){
+  const k=M.mk, q=M.st.map(s=>stState(s,t));
+  setText(E.cMag,P.mag.toFixed(1));setText(E.cDepth,P.depth+' km');setText(E.cGround,GROUND[P.ground].name);
+  const located=S.locating&&S.locT>=LOC_SHOW;
+  setText(E.cEpi,located?'LOCALIZADO':(S.locating?'LOCALIZANDO…':'NÃO LOCALIZADO'));
+  E.cEpi.style.color=located?'var(--ok)':(S.locating?'var(--accent)':'var(--text)');
+  const nP=q.filter(x=>x.p).length, nS=q.filter(x=>x.s).length, nL=q.filter(x=>x.l).length, nR=q.filter(x=>x.rec).length;
+  const wst=(n,start)=>t<start?['AGUARDANDO','chip']:(n===0?['PROPAGANDO','chip acc']:['DETECTADA','chip ok']);
+  let r=wst(nP,T0);setText(E.stP,r[0]);setCls(E.stP,r[1]);setText(E.cntP,nP?`${nP}/4`:'');
+  r=wst(nS,T0);setText(E.stS,r[0]);setCls(E.stS,r[1]);setText(E.cntS,nS?`${nS}/4`:'');
+  const surfStart=T0+P.depth/V.s;
+  if(t<surfStart){setText(E.stL,'AGUARDANDO');setCls(E.stL,'chip');}
+  else if(nL===0){setText(E.stL,'PROPAGANDO');setCls(E.stL,'chip acc');}
+  else if(nR<4){setText(E.stL,'ATIVA');setCls(E.stL,'chip dan');}
+  else {setText(E.stL,'DETECTADA');setCls(E.stL,'chip ok');}
+  setText(E.cntL,nL?`${nL}/4`:'');
+  M.st.forEach((s,i)=>{
+    const c=$('#sc'+s.id);setText(c,{WAITING:'AGUARDANDO',DETECTING:'DETECTANDO',RECORDED:'REGISTRADO'}[q[i].state]);setCls(c,'chip '+(q[i].rec?'ok':q[i].p?'warn':''));
+    setText($('#ap'+s.id),q[i].p?s.tp.toFixed(2):'—');setText($('#as'+s.id),q[i].s?s.ts.toFixed(2):'—');
+    setText($('#ad'+s.id),q[i].s?(s.ts-s.tp).toFixed(2):'—');
+    $('#ap'+s.id).className='num'+(q[i].p?' hit':'');$('#as'+s.id).className='num'+(q[i].s?' hit':'');$('#ad'+s.id).className='num'+(q[i].s?' hit':'');
+  });
+  // banner
+  const ph=phaseOf(t), names=['AGUARDANDO EVENTO','RUPTURA DA FALHA','ONDA P','ONDA S','ONDAS SUPERFICIAIS','ESTAÇÕES REGISTRAM','ANÁLISE'];
+  setText(E.bPhase,ph?`FASE 0${ph}`:'SISTEMA PRONTO');setText(E.bName,names[ph]);
+  let st=['EM ESPERA','RUPTURA DA FALHA DETECTADA','ONDAS P SE PROPAGANDO','ONDAS S SE PROPAGANDO','ONDAS SUPERFICIAIS SE PROPAGANDO','ESTAÇÕES REGISTRANDO O EVENTO',located?'EPICENTRO LOCALIZADO':(S.locating?'LOCALIZANDO EPICENTRO…':'ANÁLISE PRONTA')][ph];
+  setText(E.bStatus,st);
+  // wave chip
+  const chips=[null,null,['ONDA P','Primeira onda sísmica a chegar',COL.p],['ONDA S','Onda sísmica secundária',COL.s],['ONDAS SUPERFICIAIS','Mais lentas e de maior amplitude, percorrem o solo',COL.l],null,null];
+  const c=chips[ph];
+  E.waveChip.classList.toggle('show',!!c);
+  if(c){setText(E.wcT,c[0]);setText(E.wcD,c[1]);E.waveChip.style.borderLeftColor=c[2];}
+}
+
+/* timeline */
+let twW=1;
+function buildTimeline(){
+  $$('.mk',E.tw).forEach(n=>n.remove());
+  const k=M.mk, labs=[['FALHA',0],['ONDA P',k.t0],['ONDA S',k.S0],['SUPERFÍCIE',k.L0],['ANÁLISE',k.m4]];
+  labs.forEach(([n,tm])=>{
+    const d=document.createElement('div');d.className='mk';d.dataset.t=tm;d.style.left=(tm/k.end*100)+'%';
+    d.innerHTML=`<i></i><span>${n}</span>`;E.tw.appendChild(d);
+  });
+  twW=E.tw.clientWidth||1;
+}
+function renderTimeline(t){
+  const f=clamp(t/M.mk.end,0,1);
+  const s=Math.max(0,t), mm=Math.floor(s/60), ss2=s-mm*60;
+  setText(E.clock,`${String(mm).padStart(2,'0')}:${ss2.toFixed(2).padStart(5,'0')}`);
+  E.fill.style.transform=`scaleX(${f.toFixed(4)})`;
+  E.ph.style.transform=`translateX(${(f*twW-1).toFixed(1)}px)`;
+  $$('.mk',E.tw).forEach(m=>m.classList.toggle('done',t>=+m.dataset.t-1e-6&&(t>0||+m.dataset.t===0&&S.playing)));
+}
+
+/* station panel */
+const SG={x0:38,x1:312,yc:76,half:50};
+function buildStationChart(){
+  const g=E.spSvg;g.innerHTML='';
+  el('rect',{x:0,y:0,width:320,height:140,fill:'transparent'},g);
+  el('line',{x1:SG.x0,x2:SG.x0,y1:12,y2:128,stroke:COL.mut,'stroke-opacity':.7},g);
+  el('line',{x1:SG.x0,x2:SG.x1,y1:128,y2:128,stroke:COL.mut,'stroke-opacity':.7},g);
+  el('line',{x1:SG.x0,x2:SG.x1,y1:SG.yc,y2:SG.yc,stroke:'#fff','stroke-opacity':.08,'stroke-dasharray':'3 4'},g);
+  const a=el('text',{transform:'translate(11 70) rotate(-90)','text-anchor':'middle',fill:COL.mut,'font-size':8.5,'letter-spacing':2},g);a.textContent='AMPLITUDE';
+  const tt=el('text',{x:(SG.x0+SG.x1)/2,y:139,'text-anchor':'middle',fill:COL.mut,'font-size':8.5,'letter-spacing':2},g);tt.textContent='TEMPO';
+  SG.marks={};
+  [['p',COL.p],['s',COL.s],['l',COL.l]].forEach(([k,c])=>{
+    const ln=el('line',{y1:14,y2:128,stroke:c,'stroke-dasharray':'2 3',opacity:0},g);
+    const tx=el('text',{y:23,'text-anchor':'middle',fill:c,'font-size':9,'font-weight':700,opacity:0},g);tx.textContent=k.toUpperCase();
+    SG.marks[k]={ln,tx};
+  });
+  SG.path=el('path',{fill:'none',stroke:COL.p,'stroke-width':1.4,'stroke-linejoin':'round'},g);
+  SG.head=el('line',{y1:12,y2:128,stroke:COL.txt,'stroke-opacity':.6,opacity:0},g);
+}
+function openStation(id){S.sel=id;E.spanel.classList.add('show');}
+function closeStation(){S.sel=null;E.spanel.classList.remove('show');}
+function renderStationPanel(t){
+  if(!S.sel) return;
+  const s=M.st.find(x=>x.id===S.sel), q=stState(s,t);
+  setText(E.spTitle,`ESTAÇÃO ${s.id}`);setText(E.spState,{WAITING:'AGUARDANDO',DETECTING:'DETECTANDO',RECORDED:'REGISTRADO'}[q.state]);setCls(E.spState,'chip '+(q.rec?'ok':q.p?'warn':''));
+  setText(E.spDist,s.dist.toFixed(1)+' km');
+  const row=(e,on,tm)=>{setText(e,on?`DETECTADA · ${tm.toFixed(2)} s`:'AGUARDANDO');e.style.color=on?'var(--ok)':'var(--muted)';};
+  row(E.spP,q.p,s.tp);row(E.spS,q.s,s.ts);row(E.spL,q.l,s.tl);
+  // seismogram window [tp-2, tr+2]
+  const a0=Math.max(0,s.tp-2), a1=s.tr+2, X0=SG.x0, W2=SG.x1-SG.x0;
+  const N=Math.round(W2*1.6), lim=Math.min(a1,t);
+  let d='';
+  if(lim>a0){
+    const n=Math.max(2,Math.ceil((lim-a0)/(a1-a0)*N));
+    for(let i=0;i<=n;i++){const tau=a0+(lim-a0)*i/n;d+=(i?'L':'M')+(X0+(tau-a0)/(a1-a0)*W2).toFixed(1)+','+(SG.yc-sig(s,tau)*SG.half).toFixed(1);}
+  }
+  SG.path.setAttribute('d',d);
+  [['p',s.tp],['s',s.ts],['l',s.tl]].forEach(([k,tm])=>{
+    const on=t>=tm, x=X0+(tm-a0)/(a1-a0)*W2, m=SG.marks[k];
+    m.ln.setAttribute('x1',x);m.ln.setAttribute('x2',x);m.tx.setAttribute('x',x);
+    m.ln.setAttribute('opacity',on?.8:0);m.tx.setAttribute('opacity',on?1:0);
+  });
+  if(t>a0&&t<a1){const x=X0+(t-a0)/(a1-a0)*W2;SG.head.setAttribute('x1',x);SG.head.setAttribute('x2',x);SG.head.setAttribute('opacity',1);}
+  else SG.head.setAttribute('opacity',0);
+}
+
+/* =====================================================================
+   UI STATE & CONTROL
+   ===================================================================== */
+const tip=$('#tip');let tipFn=null;
+function showTip(fn,e){tipFn=fn;tip.style.display='block';tip.innerHTML=fn();moveTip(e);}
+function moveTip(e){const w=tip.offsetWidth,h=tip.offsetHeight;let x=e.clientX+16,y=e.clientY+16;if(x+w>innerWidth-8)x=e.clientX-w-16;if(y+h>innerHeight-8)y=e.clientY-h-16;tip.style.left=x+'px';tip.style.top=y+'px';}
+function hideTip(){tipFn=null;tip.style.display='none';}
+document.addEventListener('mouseover',e=>{const n=e.target.closest&&e.target.closest('[data-tip]');if(n)showTip(()=>`<b>${n.dataset.tipt||''}</b>${n.dataset.tip}`,e);});
+document.addEventListener('mousemove',e=>{if(e.target.closest&&e.target.closest('[data-tip]'))moveTip(e);});
+document.addEventListener('mouseout',e=>{if(e.target.closest&&e.target.closest('[data-tip]'))hideTip();});
+
+function setView(v){
+  S.view=v;
+  $('#tabMap').classList.toggle('active',v==='map');$('#tabXs').classList.toggle('active',v==='xs');
+  mapSvg.classList.toggle('active',v==='map');xsSvg.classList.toggle('active',v==='xs');
+  if(v!=='map'&&S.selecting){S.selecting=false;}
+}
+function restartIdle(){
+  S.t=0;S.playing=false;S.stopAt=null;S.locating=false;S.locT=0;if(S.pres)S.step=0;
+}
+function onGeometryChange(){          // epicenter or depth changed → timing changes
+  restartIdle();recompute();layoutMap();layoutXS();buildTimeline();
+}
+
+function setFill(i){const p=(i.value-i.min)/(i.max-i.min)*100;i.style.setProperty('--p',p+'%');}
+function syncParams(){
+  $('#magIn').value=P.mag;$('#depthIn').value=P.depth;$('#groundIn').value=P.ground;
+  setFill($('#magIn'));setFill($('#depthIn'));
+  $('#magVal').textContent=`Magnitude ${P.mag.toFixed(1)}`;
+  const m=P.mag, cls=m<3?'MICRO':m<4?'MENOR':m<5?'LEVE':m<6?'MODERADO':m<7?'FORTE':m<8?'GRANDE':'EXTREMO';
+  $('#magNote').innerHTML=`Classe: <b>${cls}</b>. Controla amplitude, alcance visual e duração do tremor.`;
+  $$('#mscale i').forEach((n,i)=>{const on=i+1<=Math.floor(m+.0001);n.className=on?(i>=7?'on xx':i>=5?'on hi':'on'):'';});
+  $('#depthVal').textContent=`${P.depth} km`;
+  const f=M.depthF, lv=f>.75?'ALTA':f>.5?'MÉDIA':'BAIXA';
+  $('#depthNote').innerHTML=`Intensidade relativa na superfície: <b>${lv}</b>. Mais fundo, as ondas demoram mais a chegar.`;
+  $('#epiCoord').textContent=`X ${(P.epi.x/KM).toFixed(1)} · Y ${(P.epi.y/KM).toFixed(1)} km`;
+  $('#groundNote').innerHTML=GROUND[P.ground].note;
+  $('#btnSelect').textContent=S.selecting?'CLIQUE NO MAPA…':'SELECIONAR NO MAPA';
+  $('#btnSelect').classList.toggle('on',S.selecting);
+  stage.classList.toggle('selecting',S.selecting);E.selHint.classList.toggle('show',S.selecting);
+}
+
+function simulate(){S.t=0;S.locating=false;S.locT=0;S.stopAt=null;S.playing=true;closeStationIfPres();}
+function closeStationIfPres(){}
+function play(){
+  if(S.t>=M.mk.end&&!S.locating){S.t=0;}
+  S.stopAt=null;S.playing=true;
+}
+function pause(){S.playing=false;}
+function restart(){S.t=0;S.playing=false;S.stopAt=null;S.locating=false;S.locT=0;if(S.pres)S.step=0;}
+function locate(){
+  if(S.t<M.mk.m4) return;
+  setView('map');S.locating=true;S.locT=0;S.playing=true;S.stopAt=null;if(S.pres)S.step=6;
+}
+function resetAll(){
+  P={mag:DEF.mag,depth:DEF.depth,ground:DEF.ground,epi:{...DEF.epi}};
+  S.selecting=false;S.speed=1;S.sel=null;closeStation();hideTip();restartIdle();S.step=0;
+  recompute();layoutMap();layoutXS();buildTimeline();syncParams();
+  $$('.spd').forEach(b=>b.classList.toggle('on',b.dataset.s==='1'));
+}
+
+/* ---- presentation ---- */
+const stepView=n=>n>=1&&n<=3?'xs':'map';
+function presNext(){
+  const n=S.step+1;if(n>6)return;
+  S.step=n;S.locating=n===6?S.locating:false;
+  if(n<=5){
+    S.t=n===1?0:M.ends[n-2];S.stopAt=M.ends[n-1];S.playing=true;S.locating=false;S.locT=0;
+    if(n===5)openStation('A');else closeStation();
+  } else { setView('map'); closeStation(); S.t=Math.max(S.t,M.mk.m4);S.locating=true;S.locT=0;S.stopAt=null;S.playing=true; }
+  if(n<=5)setView(stepView(n));
+}
+function presBack(){
+  const n=S.step-1;if(n<0)return;
+  S.step=n;S.locating=false;S.locT=0;S.playing=false;S.stopAt=null;
+  S.t=n===0?0:M.ends[n-1];
+  if(n===5)openStation('A');else closeStation();
+  if(n>=1)setView(stepView(n));
+}
+function presPlay(){
+  if(S.playing){pause();return;}
+  if(S.step===0){presNext();return;}
+  if(S.step===6&&S.locating&&S.locT<LOC_DUR){S.playing=true;return;}
+  if(S.t>=M.mk.end&&!S.locating){presBack();S.step=0;S.t=0;S.playing=true;S.stopAt=null;return;}
+  S.stopAt=null;S.playing=true;
+}
+function renderPres(){
+  const n=S.step;
+  setText(E.psStep,`PASSO 0${n} / 06`);
+  setText(E.psTitle,n?STEPS[n-1][0]:'PRONTO');
+  setText(E.psDesc,n?STEPS[n-1][1]:'Pressione PRÓXIMO → (ou a seta direita) para iniciar a sequência.');
+  setText(E.psPlay,S.playing?'PAUSAR':'INICIAR');
+  if(!E.psProg.children.length)E.psProg.innerHTML='<i></i>'.repeat(6);
+  [...E.psProg.children].forEach((i,k)=>i.classList.toggle('on',k<n));
+}
+function enterPres(){
+  S.pres=true;document.body.classList.add('pres');$('#btnPres').textContent='SAIR DA APRESENTAÇÃO';
+  document.body.classList.remove('dl','dr');
+  restartIdle();S.step=0;closeStation();S.selecting=false;syncParams();setView('map');
+  const r=document.documentElement.requestFullscreen;if(r)r.call(document.documentElement).catch(()=>{});
+  setTimeout(()=>{unit();twW=E.tw.clientWidth;},50);
+}
+function exitPres(){
+  S.pres=false;document.body.classList.remove('pres');$('#btnPres').textContent='MODO APRESENTAÇÃO';
+  if(document.fullscreenElement)document.exitFullscreen().catch(()=>{});
+  setTimeout(()=>{unit();twW=E.tw.clientWidth;},50);
+}
+
+function stageShake(t){
+  const k=M.mk;let lv=0;
+  if(S.playing&&t>0&&t<k.m4){
+    lv=t<k.t0?.5:t<k.S0?.25:t<k.L0?.6:.6+.4*ss((t-k.L0)/2)-.7*ss((t-k.R0)/(k.m4-k.R0));
+    lv=Math.max(0,lv);
+  }
+  const A=lv*(.4+2.6*M.ampSurf);
+  stage.style.transform=A>.02?`translate(${(A*(Math.sin(t*47)+.5*Math.sin(t*29))).toFixed(2)}px,${(A*.7*Math.cos(t*41)).toFixed(2)}px)`:'';
+}
+/* ---- main loop ---- */
+let last=performance.now();
+function advance(d){
+  const end=M.mk.end;
+  if(S.locating&&S.locT<LOC_DUR)S.locT=Math.min(LOC_DUR,S.locT+d);
+  if(S.t<end){
+    let nt=S.t+d;
+    if(S.stopAt!=null&&S.t<S.stopAt&&nt>=S.stopAt){nt=S.stopAt;S.playing=false;S.stopAt=null;}
+    else if(nt>=end)nt=end;
+    S.t=nt;
+  }
+  if(S.t>=end&&(!S.locating||S.locT>=LOC_DUR)&&S.playing)S.playing=false;
+  if(S.pres&&S.playing&&S.stopAt==null&&!S.locating)S.step=Math.max(S.step,stepFromTime(S.t));
+}
+function updateButtons(){
+  const t=S.t;
+  $('#btnLocate').disabled=!(t>=M.mk.m4-1e-6)||(S.locating&&S.locT<LOC_DUR);
+  $('#bPlay').classList.toggle('on',S.playing);$('#bPause').classList.toggle('on',!S.playing&&t>0);
+  $('#btnSim').textContent=S.playing&&t<M.mk.end?'SIMULANDO…':'SIMULAR TERREMOTO';
+}
+function render(){
+  const t=S.t;
+  if(S.view==='map'||true){renderMap(t);renderXS(t);}
+  renderStatus(t);renderTimeline(t);renderStationPanel(t);updateButtons();
+  stageShake(t);
+  if(S.pres)renderPres();
+  if(tipFn)tip.innerHTML=tipFn();
+}
+function frame(now){
+  const dt=Math.min(.1,(now-last)/1000);last=now;
+  if(S.playing)advance(dt*S.speed);
+  render();requestAnimationFrame(frame);
+}
+
+/* =====================================================================
+   INIT & EVENTS
+   ===================================================================== */
+function buildLegend(){
+  const sw=(inner)=>`<svg viewBox="0 0 18 14">${inner}</svg>`;
+  $('#legend').innerHTML=[
+    [sw(`<polygon points="9,1 11,6 16.5,6 12,9.5 13.8,13 9,10.6 4.2,13 6,9.5 1.5,6 7,6" fill="${COL.p}"/>`),'EPICENTRO'],
+    [sw(`<polygon points="9,2 15,12 3,12" fill="${COL.mut}"/>`),'ESTAÇÃO SISMOGRÁFICA'],
+    [sw(`<circle cx="9" cy="7" r="5.5" fill="none" stroke="${COL.p}" stroke-width="1"/>`),'ONDA P'],
+    [sw(`<circle cx="9" cy="7" r="5.5" fill="none" stroke="${COL.s}" stroke-width="2.4"/>`),'ONDA S'],
+    [sw(`<circle cx="9" cy="7" r="5.5" fill="none" stroke="${COL.l}" stroke-width="3.4" opacity=".7"/>`),'ONDA SUPERFICIAL'],
+    [sw(`<line x1="1" y1="7" x2="17" y2="7" stroke="${COL.l}" stroke-dasharray="3 2"/>`),'FALHA'],
+    [sw(`<rect x="6" y="4" width="6" height="6" fill="#5b6877" transform="rotate(45 9 7)"/>`),'PONTO DE REFERÊNCIA']
+  ].map(([i,t])=>`<div>${i}${t}</div>`).join('');
+}
+
+function init(){
+  unit();recompute();
+  buildMap();buildXS();buildStatus();buildStationChart();buildLegend();
+  $('#mscale').innerHTML='<i style="height:'+[0,1,2,3,4,5,6,7,8].map(i=>6+i*2.8).join('px"></i><i style="height:')+'px"></i>';
+  $('#mticks').innerHTML=[1,2,3,4,5,6,7,8,9].map(n=>`<span>${n}</span>`).join('');
+  layoutMap();layoutXS();buildTimeline();syncParams();
+
+  $('#magIn').addEventListener('input',e=>{P.mag=+e.target.value;recompute();syncParams();buildTimeline();S.t=Math.min(S.t,M.mk.end);});
+  $('#depthIn').addEventListener('input',e=>{P.depth=+e.target.value;onGeometryChange();syncParams();});
+  $('#groundIn').addEventListener('change',e=>{P.ground=e.target.value;recompute();layoutMap();layoutXS();buildTimeline();syncParams();S.t=Math.min(S.t,M.mk.end);});
+  $('#btnSelect').addEventListener('click',()=>{S.selecting=!S.selecting;if(S.selecting)setView('map');syncParams();});
+  $$('.tab').forEach(b=>b.addEventListener('click',()=>{setView(b.dataset.view);syncParams();}));
+  $('#btnSim').addEventListener('click',simulate);
+  $('#btnLocate').addEventListener('click',locate);
+  $('#bPlay').addEventListener('click',play);
+  $('#bPause').addEventListener('click',pause);
+  $('#bRestart').addEventListener('click',restart);
+  $$('.spd').forEach(b=>b.addEventListener('click',()=>{S.speed=+b.dataset.s;$$('.spd').forEach(x=>x.classList.toggle('on',x===b));}));
+  $('#btnReset').addEventListener('click',resetAll);
+  $('#btnPres').addEventListener('click',()=>S.pres?exitPres():enterPres());
+  $('#psBack').addEventListener('click',presBack);$('#psNext').addEventListener('click',presNext);
+  $('#psPlay').addEventListener('click',presPlay);$('#psExit').addEventListener('click',exitPres);
+  $('#spClose').addEventListener('click',closeStation);
+  $('#btnDL').addEventListener('click',()=>{document.body.classList.toggle('dl');document.body.classList.remove('dr');});
+  $('#btnDR').addEventListener('click',()=>{document.body.classList.toggle('dr');document.body.classList.remove('dl');});
+  const learn=$('#learn');
+  const lopen=v=>{learn.classList.toggle('show',v);learn.setAttribute('aria-hidden',!v);};
+  $('#btnLearn').addEventListener('click',()=>lopen(true));
+  $('#learnClose').addEventListener('click',()=>lopen(false));
+  learn.addEventListener('click',e=>{if(e.target===learn)lopen(false);});
+  // timeline scrubbing
+  const scrub=e=>{
+    const r=E.tw.getBoundingClientRect(), f=clamp((e.clientX-r.left)/r.width,0,1);
+    S.t=f*M.mk.end;S.stopAt=null;if(S.t<M.mk.m4){S.locating=false;S.locT=0;}
+  };
+  let drag=false;
+  E.track.addEventListener('pointerdown',e=>{drag=true;E.track.setPointerCapture(e.pointerId);scrub(e);});
+  E.track.addEventListener('pointermove',e=>{if(drag)scrub(e);});
+  E.track.addEventListener('pointerup',()=>drag=false);
+  // keyboard
+  document.addEventListener('keydown',e=>{
+    if(/INPUT|SELECT|TEXTAREA/.test(e.target.tagName)&&e.key!=='Escape')return;
+    if(e.key==='Escape'){if(learn.classList.contains('show'))lopen(false);else if(S.selecting){S.selecting=false;syncParams();}else if(S.pres)exitPres();}
+    else if(S.pres&&e.key==='ArrowRight'){presNext();}
+    else if(S.pres&&e.key==='ArrowLeft'){presBack();}
+    else if(e.key===' '&&e.target.tagName!=='BUTTON'){e.preventDefault();S.pres?presPlay():(S.playing?pause():play());}
+  });
+  addEventListener('resize',()=>{unit();twW=E.tw.clientWidth||1;});
+  document.addEventListener('fullscreenchange',()=>{setTimeout(()=>{unit();twW=E.tw.clientWidth||1;},60);});
+  requestAnimationFrame(t=>{last=t;frame(t);});
+  window.__lab={S,P,get M(){return M;},simulate,locate,presNext,presBack,render,advance};
+}
+init();
+})();
+</script>
+</body>
+</html>

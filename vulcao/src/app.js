@@ -1,0 +1,587 @@
+'use strict';
+/* =====================================================================
+   VOLCANO LAB — modelo visual educacional (não é um modelo geofísico)
+   Camadas:  Engine (estado/lógica)  →  Renderer (canvas)  →  UI (DOM)
+   ===================================================================== */
+
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const easeIO = t => (t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
+const easeOut = t => 1 - Math.pow(1 - t, 3);
+const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+const mix3 = (c1, c2, t) => c1.map((v, i) => Math.round(lerp(v, c2[i], t)));
+
+/* ---------------------------------------------------------------------
+   ENGINE — sem nenhum acesso a DOM ou canvas
+   --------------------------------------------------------------------- */
+const DEFAULTS = { height: 37, pressure: 42, visc: 1, temp: 50, wind: 30 };
+const VISC = [0, 0.5, 1];
+
+const PHASES = [
+  { n: 'PRESSURE BUILDUP', pt: 'ACÚMULO DE PRESSÃO', d: 3, cap: 'A pressão aumenta sob o sistema vulcânico.' },
+  { n: 'SEISMIC ACTIVITY', pt: 'ATIVIDADE SÍSMICA', d: 3, cap: 'O movimento do magma e dos gases causa pequenos tremores.' },
+  { n: 'MAGMA ASCENT', pt: 'ASCENSÃO DO MAGMA', d: 3, cap: 'O magma começa a subir pela chaminé em direção à superfície.' },
+  { n: 'VENT OPENING', pt: 'ABERTURA DA CHAMINÉ', d: 2, cap: 'A pressão vence a resistência da rocha e a saída se abre.' },
+  { n: 'ERUPTION', pt: 'ERUPÇÃO', d: 4, cap: 'Gases, cinzas e material incandescente saem pela cratera.' },
+  { n: 'ASH DISPERSION', pt: 'DISPERSÃO DE CINZAS', d: 5, cap: 'O vento arrasta a nuvem de cinzas e a espalha pela atmosfera.' },
+  { n: 'LAVA FLOW', pt: 'ESCOAMENTO DE LAVA', d: 6, cap: 'A lava desce a encosta; quanto mais viscosa, mais lenta e espessa.' },
+  { n: 'STABILIZATION', pt: 'ESTABILIZAÇÃO', d: 4, cap: 'A pressão cai, a lava esfria e o vulcão volta ao repouso.' },
+];
+const START = []; let _acc = 0;
+PHASES.forEach(p => { START.push(_acc); _acc += p.d; });
+const TOTAL = _acc;
+const LAVA_START = START[4] + 2;
+
+const STEPS = [
+  { t: 'PRESSÃO', ph: 0, cap: 'A pressão se acumula sob o sistema vulcânico.' },
+  { t: 'MAGMA', ph: 2, cap: 'O magma começa a se mover em direção à superfície.' },
+  { t: 'ERUPÇÃO', ph: 4, cap: 'A pressão rompe a saída e o material é expelido pela cratera.' },
+  { t: 'CINZAS', ph: 5, cap: 'O vento carrega as cinzas e define a direção da nuvem.' },
+  { t: 'LAVA', ph: 6, cap: 'A lava escorre pela encosta e se divide em pequenos fluxos.' },
+  { t: 'PÓS-ERUPÇÃO', ph: 7, cap: 'O sistema esfria e a atividade diminui gradualmente.' },
+];
+const stepOfPhase = ph => (ph < 2 ? 0 : ph < 4 ? 1 : ph === 4 ? 2 : ph === 5 ? 3 : ph === 6 ? 4 : 5);
+
+const Engine = {
+  params: { ...DEFAULTS },
+  T: 0,            // relógio do mundo (avança em 1x/2x/4x, congela na pausa)
+  sim: 0,          // tempo da sequência de erupção
+  mode: 'idle',    // idle | running | done
+  paused: false,
+  speed: 1,
+  parts: [],
+  acc: { a: 0, s: 0, e: 0, m: 0 },
+  burst: false,
+
+  derived() {
+    const p = this.params;
+    return { hn: p.height / 100, E: 0.25 + 0.75 * p.pressure / 100, visc: VISC[p.visc], tN: p.temp / 100, wN: p.wind / 100 };
+  },
+
+  reset() {
+    this.params = { ...DEFAULTS };
+    this.T = 0; this.sim = 0; this.mode = 'idle'; this.paused = false; this.speed = 1;
+    this.parts.length = 0; this.acc = { a: 0, s: 0, e: 0, m: 0 }; this.burst = false;
+  },
+
+  start() { this.seek(0); },
+
+  seek(ph) {
+    this.mode = 'running'; this.paused = false;
+    this.sim = START[ph];
+    this.parts.length = 0; this.acc = { a: 0, s: 0, e: 0, m: 0 }; this.burst = false;
+    for (let t = Math.max(0, this.sim - 5); t < this.sim; t += 0.1) this.updateParticles(this.sample(t), 0.1);
+  },
+
+  /** Estado derivado de forma determinística a partir do tempo da sequência. */
+  sample(sim = this.sim) {
+    const d = this.derived(), p = this.params;
+    if (this.mode === 'idle') {
+      const lp = Math.min(100, p.pressure + 4 * (0.5 - 0.5 * Math.cos(this.T * 2 * Math.PI / 80)));
+      const c = this.T % 7;
+      return { ph: -1, u: 0, pr: lp / 100, lp, m: 0.04 + 0.02 * Math.sin(this.T * 0.8), vent: 0, inten: 0,
+        shake: c < 1 ? 0.12 * Math.sin(Math.PI * c) : 0, lavaT: 0, cool: 0 };
+    }
+    sim = clamp(sim, 0, TOTAL);
+    let ph = 0; for (let i = 0; i < START.length; i++) if (sim >= START[i]) ph = i;
+    const u = clamp((sim - START[ph]) / PHASES[ph].d, 0, 1), e = easeIO(u);
+    const pr = [0.6 * e, 0.6 + 0.25 * u, 0.85 + 0.15 * e, 1, 1 - 0.3 * u, 0.7 - 0.2 * u, 0.5 - 0.1 * u, 0.4 - 0.15 * e][ph];
+    const m = [0.04, 0.04, 0.04 + 0.96 * e, 1, 1, 1, 1, 1 - 0.3 * e][ph];
+    const vent = [0, 0, 0, e, 1, 1, 1, 1][ph];
+    const inten = [0, 0, 0, 0.12 * u, 0.12 + 0.88 * easeOut(u), 1, 1 - 0.4 * u, 0.6 * (1 - e)][ph];
+    const sh = [0.1, 0.1 + 0.4 * u, 0.5 + 0.2 * u, 0.7 + 0.3 * u, 1 - 0.2 * u, 0.8 - 0.2 * u, 0.6 - 0.25 * u, 0.35 * (1 - u)][ph];
+    return { ph, u, pr, lp: p.pressure * pr, m, vent, inten, shake: sh * (0.4 + 0.6 * d.E),
+      lavaT: Math.max(0, sim - LAVA_START), cool: ph === 7 ? e : 0 };
+  },
+
+  step(dt) {
+    if (this.paused) return;
+    const sdt = dt * this.speed;
+    this.T += sdt;
+    let ended = false;
+    if (this.mode === 'running') {
+      this.sim += sdt;
+      if (this.sim >= TOTAL) { this.sim = TOTAL; this.mode = 'done'; ended = true; }
+    }
+    this.updateParticles(this.mode === 'done' ? { ...this.sample(), ph: 7, inten: 0, vent: 1 } : this.sample(), sdt);
+    return ended;
+  },
+
+  /** Partículas em coordenadas normalizadas (unidade = altura do canvas), relativas à cratera. */
+  updateParticles(s, dt) {
+    const d = this.derived(), E = d.E, wind = d.wN * 0.2, A = this.acc, P = this.parts, CAP = 240;
+    const ashRate = s.ph >= 4 ? s.inten * (s.ph === 6 ? 0.55 : 1) * (14 + 20 * E) : 0;
+    const smokeRate = s.ph < 0 || s.ph < 3 ? 1.8 : 3 + 8 * s.vent;
+    const embRate = s.ph === 4 || s.ph === 5 ? s.inten * (5 + 9 * E) : 0;
+    // ejeção de magma: velocidade inicial = f(pressão, temperatura, altura); alcance = v0² / 2g
+    const pN = this.params.pressure / 100;
+    const v0 = (0.3 + 0.5 * pN) * (0.8 + 0.4 * d.tN) * (0.9 + 0.2 * d.hn), G = 0.8;
+    const mRate = s.ph === 4 ? s.inten * (10 + 30 * pN) : s.ph === 5 ? s.inten * (4 + 10 * pN) * 0.5 : 0;
+    A.m = (A.m || 0) + mRate * dt;
+    const spawnM = f => { if (P.length < CAP + 60) P.push({ t: 'm', x: (Math.random() - .5) * 0.014, y: 0, vx: (Math.random() - .5) * (0.1 + 0.25 * (1 - d.visc * 0.5)) + wind * 0.15, vy: -v0 * f * (0.55 + 0.45 * Math.random()), age: 0, life: 6, s0: (0.005 + 0.007 * Math.random()) * (0.7 + 0.6 * E) * (0.8 + 0.6 * d.visc), g: 0, k: 1, sd: Math.random() }); };
+    if (s.ph === 4 && !this.burst) { this.burst = true; const n = Math.round(22 + 40 * E); for (let i = 0; i < n; i++) spawnM(1.15); }
+    while (A.m >= 1) { A.m--; spawnM(1); }
+    A.a += ashRate * dt; A.s += smokeRate * dt; A.e += embRate * dt;
+    const R = Math.random;
+    while (A.a >= 1) { A.a--; if (P.length < CAP) P.push({ t: 'a', x: (R() - .5) * 0.02, y: 0, vx: (R() - .5) * 0.05, vy: -(0.1 + 0.16 * E * (0.5 + R() * 0.5)), age: 0, life: 6 + R() * 4, s0: 0.016, g: 0.04 + R() * 0.03, k: 0.6 + R() * 0.6, sd: R() * 6 }); }
+    while (A.s >= 1) { A.s--; if (P.length < CAP) P.push({ t: 's', x: (R() - .5) * 0.015, y: 0, vx: 0, vy: -0.03 - R() * 0.02, age: 0, life: 5 + R() * 2, s0: 0.008, g: 0.012, k: 0.5 + R() * 0.5, sd: R() * 6 }); }
+    while (A.e >= 1) { A.e--; if (P.length < CAP) P.push({ t: 'e', x: (R() - .5) * 0.015, y: 0, vx: (R() - .5) * 0.16 + wind * 0.25, vy: -(0.16 + R() * 0.24) * (0.6 + 0.4 * E), age: 0, life: 1.4 + R() * 0.6, s0: 0.0035, g: 0, k: 1, sd: 0 }); }
+    for (let i = P.length - 1; i >= 0; i--) {
+      const p = P[i]; p.age += dt;
+      if (p.age > p.life) { P.splice(i, 1); continue; }
+      if (p.t === 'm') {
+        p.vy += G * dt; p.x += p.vx * dt; p.y += p.vy * dt;
+        if (p.vy > 0 && p.y > 0.02 + Math.abs(p.x) * 0.8) P.splice(i, 1);
+        continue;
+      }
+      if (p.t === 'e') { p.vy += 0.38 * dt; }
+      else {
+        p.vy *= 1 - 0.28 * dt;
+        const tv = wind * Math.min(1, p.age * 0.5) * p.k;
+        p.vx += (tv - p.vx) * Math.min(1, 1.4 * dt);
+        p.x += Math.sin(p.age * 1.7 + p.sd) * 0.006 * dt;
+      }
+      p.x += p.vx * dt; p.y += p.vy * dt;
+    }
+  },
+};
+
+/* ---------------------------------------------------------------------
+   RENDERER — somente desenho; lê o estado do Engine
+   --------------------------------------------------------------------- */
+const Renderer = {
+  cv: null, ctx: null, W: 0, H: 0, dpr: 1, v: 0, target: 0, sprites: {}, stars: [],
+
+  init(cv) {
+    this.cv = cv; this.ctx = cv.getContext('2d');
+    const mk = (r, g, b) => {
+      const c = document.createElement('canvas'); c.width = c.height = 64;
+      const x = c.getContext('2d'), gr = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+      gr.addColorStop(0, `rgba(${r},${g},${b},1)`); gr.addColorStop(.55, `rgba(${r},${g},${b},.45)`); gr.addColorStop(1, `rgba(${r},${g},${b},0)`);
+      x.fillStyle = gr; x.fillRect(0, 0, 64, 64); return c;
+    };
+    this.sprites = { ash: mk(142, 151, 163), smoke: mk(176, 184, 194), glow: mk(255, 150, 60) };
+    for (let i = 0; i < 45; i++) this.stars.push([(i * 97.13 % 1), (i * 53.71 % 1) * 0.5, 0.15 + (i % 5) * 0.06]);
+    new ResizeObserver(() => this.resize()).observe(cv.parentElement);
+    this.resize();
+  },
+
+  resize() {
+    const r = this.cv.parentElement.getBoundingClientRect();
+    this.dpr = Math.min(2, window.devicePixelRatio || 1);
+    this.W = Math.max(200, r.width); this.H = Math.max(200, r.height);
+    this.cv.width = this.W * this.dpr; this.cv.height = this.H * this.dpr;
+  },
+
+  geo() {
+    const { W, H, v } = this, d = Engine.derived();
+    const rc = 0.07, bw = Math.min(W * 0.4, H * 0.78), gy = H * (0.80 - 0.20 * v), hpx = H * (0.20 + 0.22 * d.hn);
+    return { W, H, v, d, rc, bw, gy, hpx, cw: bw * rc, cx: W / 2, dip: hpx * 0.05, ug: H - gy };
+  },
+  prof(g, r) { return g.gy - g.hpx * Math.pow((1 - Math.min(r, 1)) / (1 - g.rc), 1.6); },
+
+  conePath(g) {
+    const c = this.ctx, N = 40;
+    c.beginPath(); c.moveTo(g.cx - g.bw, g.gy);
+    for (let i = N; i >= 0; i--) { const r = g.rc + (1 - g.rc) * i / N; c.lineTo(g.cx - r * g.bw, this.prof(g, r)); }
+    c.quadraticCurveTo(g.cx, g.gy - g.hpx + g.dip * 2, g.cx + g.cw, g.gy - g.hpx);
+    for (let i = 0; i <= N; i++) { const r = g.rc + (1 - g.rc) * i / N; c.lineTo(g.cx + r * g.bw, this.prof(g, r)); }
+    c.lineTo(g.cx + g.bw, g.gy); c.closePath();
+  },
+
+  frame(rdt) {
+    this.v += (this.target - this.v) * Math.min(1, rdt * 5);
+    if (Math.abs(this.target - this.v) < 0.002) this.v = this.target;
+    const c = this.ctx, { W, H, dpr } = this;
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const s = Engine.sample(), g = this.geo(), T = Engine.T, v = this.v;
+
+    // céu + grade
+    const sky = c.createLinearGradient(0, 0, 0, g.gy); sky.addColorStop(0, '#0B0F14'); sky.addColorStop(1, '#141e29');
+    c.fillStyle = sky; c.fillRect(0, 0, W, H);
+    c.fillStyle = '#F1F4F7';
+    this.stars.forEach(st => { c.globalAlpha = st[2] * (1 - v * 0.3); c.fillRect(st[0] * W, st[1] * H, 1.2, 1.2); });
+    c.globalAlpha = 1; c.strokeStyle = 'rgba(152,164,179,.045)'; c.lineWidth = 1; c.beginPath();
+    for (let x = 0; x < W; x += 40) { c.moveTo(x + .5, 0); c.lineTo(x + .5, H); }
+    for (let y = 0; y < H; y += 40) { c.moveTo(0, y + .5); c.lineTo(W, y + .5); }
+    c.stroke();
+
+    // tremor discreto (apenas a cena do vulcão)
+    const sh = s.shake, ox = Math.sin(T * 47) * sh * 1.3, oy = Math.sin(T * 61 + 1) * sh * 0.9;
+    c.save(); c.translate(ox, oy);
+
+    this.drawUnderground(g, s, T);
+    this.drawCone(g, s, T);
+    this.drawLava(g, s, T);
+    this.drawCraterGlow(g, s, T);
+    c.restore();
+
+    this.drawParticles(g, s);
+    this.drawOverlays(g, s);
+  },
+
+  chamber(g, s, T) {
+    const cy = g.gy + g.ug * 0.58, breathe = 1 + 0.02 * s.pr * Math.sin(T * 2);
+    return { cy, rx: g.bw * 0.42 * breathe, ry: g.ug * 0.26 * breathe };
+  },
+
+  drawUnderground(g, s, T) {
+    const c = this.ctx, { W, H, gy } = g;
+    const cols = ['#161e27', '#121920', '#18222c', '#10161d', '#141c25'];
+    for (let i = 0; i < 5; i++) {
+      const y0 = gy + g.ug * i / 5, y1 = gy + g.ug * (i + 1) / 5;
+      c.fillStyle = cols[i]; c.beginPath(); c.moveTo(0, y0);
+      for (let x = 0; x <= W; x += 24) c.lineTo(x, y0 + (i ? Math.sin(x * 0.012 + i * 2) * 3 : 0));
+      c.lineTo(W, y1 + 4); c.lineTo(0, y1 + 4); c.closePath(); c.fill();
+    }
+    c.fillStyle = cols[4]; c.fillRect(0, H - 4, W, 4);
+    c.strokeStyle = '#3a4757'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(0, gy); c.lineTo(W, gy); c.stroke();
+
+    // câmara magmática
+    const ch = this.chamber(g, s, T), cx = g.cx, glow = 0.7 + 0.3 * s.pr * (0.5 + 0.5 * Math.sin(T * 2.4));
+    const gr = c.createRadialGradient(cx, ch.cy, 0, cx, ch.cy, ch.rx);
+    gr.addColorStop(0, 'rgba(255,200,90,1)'); gr.addColorStop(.5, 'rgba(236,116,44,1)'); gr.addColorStop(1, 'rgba(140,38,30,1)');
+    c.save(); c.globalAlpha = glow;
+    c.beginPath(); c.ellipse(cx, ch.cy, ch.rx, ch.ry, 0, 0, Math.PI * 2); c.fillStyle = gr; c.fill();
+    c.restore();
+    c.strokeStyle = '#4a3530'; c.lineWidth = 2; c.beginPath(); c.ellipse(cx, ch.cy, ch.rx, ch.ry, 0, 0, Math.PI * 2); c.stroke();
+    c.fillStyle = 'rgba(255,225,160,.65)';
+    for (let i = 0; i < 10; i++) {
+      const ph = (i * 0.173 + T * (0.04 + 0.1 * s.pr)) % 1;
+      c.beginPath(); c.arc(cx + Math.sin(i * 7.7) * ch.rx * 0.7, ch.cy + ch.ry * 0.7 - ph * ch.ry * 1.4, 1 + (i % 3) * 0.6, 0, 7); c.fill();
+    }
+  },
+
+  drawCone(g, s, T) {
+    const c = this.ctx, { cx, bw, gy, hpx, v } = g;
+    const gr = c.createLinearGradient(cx - bw, 0, cx + bw, 0);
+    gr.addColorStop(0, '#2b3743'); gr.addColorStop(.5, '#212c37'); gr.addColorStop(1, '#121920');
+    this.conePath(g); c.fillStyle = gr; c.fill();
+
+    c.save(); this.conePath(g); c.clip();
+    // sulcos de erosão
+    c.strokeStyle = 'rgba(255,255,255,.05)'; c.lineWidth = 1;
+    [-.62, -.34, .28, .56].forEach((f, k) => {
+      c.beginPath(); const side = Math.sign(f), r0 = Math.abs(f);
+      for (let i = 0; i <= 12; i++) { const r = g.rc + (r0 - g.rc) * i / 12 + (1 - r0) * 0; c.lineTo(cx + side * (r * bw + i * 0.6), this.prof(g, r) + k * 0.5); }
+      c.stroke();
+    });
+    // estratos internos (corte)
+    if (v > 0.01) {
+      c.globalAlpha = 0.16 * v; c.strokeStyle = '#98A4B3';
+      for (let k = 1; k < 7; k++) {
+        c.beginPath();
+        for (let i = 0; i <= 30; i++) { const r = g.rc + (1 - g.rc) * i / 30; c.lineTo(cx - r * bw, this.prof(g, r) + k * hpx * 0.14); }
+        c.moveTo(cx + g.cw, 0);
+        c.stroke(); c.beginPath();
+        for (let i = 0; i <= 30; i++) { const r = g.rc + (1 - g.rc) * i / 30; c.lineTo(cx + r * bw, this.prof(g, r) + k * hpx * 0.14); }
+        c.stroke();
+      }
+      c.globalAlpha = 1;
+    }
+    c.restore();
+    this.conePath(g); c.strokeStyle = '#3a4757'; c.lineWidth = 1.5; c.stroke();
+
+    // chaminé + magma ascendente
+    if (v > 0.01) {
+      const ch = this.chamber(g, s, T), floor = gy - hpx + g.dip, bot = ch.cy - ch.ry * 0.8;
+      const cd = g.cw * 0.55 * (1 + 0.35 * s.vent), cdb = cd * 1.9;
+      const path = () => { c.beginPath(); c.moveTo(g.cx - cdb, bot); c.lineTo(g.cx - cd, floor); c.lineTo(g.cx + cd, floor); c.lineTo(g.cx + cdb, bot); c.closePath(); };
+      c.save(); c.globalAlpha = v; path(); c.fillStyle = '#0a0e13'; c.fill(); c.strokeStyle = '#33404e'; c.lineWidth = 1; c.stroke();
+      c.clip();
+      const yTop = bot - s.m * (bot - floor);
+      const mg = c.createLinearGradient(0, yTop, 0, bot);
+      mg.addColorStop(0, 'rgba(255,214,120,1)'); mg.addColorStop(.35, 'rgba(240,120,45,1)'); mg.addColorStop(1, 'rgba(160,44,32,1)');
+      c.fillStyle = mg; c.fillRect(g.cx - cdb, yTop, cdb * 2, bot - yTop + 2);
+      // bolhas: movimento vertical contínuo
+      c.fillStyle = 'rgba(255,235,180,.75)';
+      const spd = 0.08 + 0.3 * s.pr;
+      for (let i = 0; i < 16; i++) {
+        const ph = (i * 0.137 + T * spd) % 1, y = bot - ph * (bot - yTop);
+        if (y < yTop + 2) continue;
+        c.beginPath(); c.arc(g.cx + Math.sin(i * 12.9 + T * 1.3) * cd * 0.55, y, 0.9 + (i % 3) * 0.7, 0, 7); c.fill();
+      }
+      c.restore();
+    }
+  },
+
+  lavaColor(d, cool, a = 1) {
+    const base = mix3([150, 45, 35], [255, 170, 60], d.tN), col = mix3(base, [58, 40, 38], cool * 0.88);
+    return col;
+  },
+
+  drawLava(g, s, T) {
+    if (s.lavaT <= 0) return;
+    const c = this.ctx, d = g.d, E = d.E;
+    const reach = clamp((0.45 + 0.35 * d.tN + 0.25 * (1 - d.visc)) * (0.7 + 0.3 * d.hn) * (0.6 + 0.4 * E), 0.2, 1);
+    const k = (0.25 + 0.5 * d.tN) * (1.2 - 0.9 * d.visc);
+    const front = reach * (1 - Math.exp(-k * s.lavaT));
+    const wBase = (g.W / 900) * (3 + 3.5 * d.visc + 2 * E);
+    const flows = [
+      { side: 1, s0: 0, f: 1, w: 1, off: 0 }, { side: -1, s0: 0, f: 0.8, w: 0.85, off: 0 },
+      { side: 1, s0: 0.22, f: 0.72, w: 0.6, off: 0.05 }, { side: 1, s0: 0.45, f: 0.55, w: 0.5, off: 0.1 },
+      { side: -1, s0: 0.3, f: 0.62, w: 0.5, off: 0.07 },
+    ];
+    const col = this.lavaColor(d, s.cool);
+    const dark = col.map(v => Math.round(v * 0.5)), core = mix3(col, [255, 230, 160], 0.35 * (1 - s.cool));
+    c.lineCap = 'round'; c.lineJoin = 'round';
+    flows.forEach((fl, idx) => {
+      const end = front * fl.f; if (end <= fl.s0 + 0.01) return;
+      const n = 18, pts = [];
+      for (let i = 0; i <= n; i++) {
+        const sp = fl.s0 + (end - fl.s0) * i / n, r = g.rc + sp * (1 - g.rc);
+        let y = this.prof(g, r) + fl.off * g.hpx * Math.min(1, (sp - fl.s0) * 2) + Math.sin(sp * 9 + idx) * g.hpx * 0.004;
+        pts.push([g.cx + fl.side * r * g.bw, Math.min(y, g.gy - 1)]);
+      }
+      [[dark, 1.5, 0], [core, 0.6, 1]].forEach(([cc, wm, inner]) => {
+        for (let i = 1; i <= n; i++) {
+          const w = wBase * fl.w * wm * (0.55 + 0.45 * (1 - i / n) + (i === n ? 0.35 * d.visc : 0));
+          c.strokeStyle = `rgb(${cc[0]},${cc[1]},${cc[2]})`; c.lineWidth = Math.max(1, w);
+          c.beginPath(); c.moveTo(pts[i - 1][0], pts[i - 1][1]); c.lineTo(pts[i][0], pts[i][1]); c.stroke();
+        }
+      });
+      if (s.cool < 0.9) {
+        const hd = pts[n], gl = c.createRadialGradient(hd[0], hd[1], 0, hd[0], hd[1], wBase * 3);
+        gl.addColorStop(0, `rgba(255,170,70,${0.5 * (1 - s.cool)})`); gl.addColorStop(1, 'rgba(255,170,70,0)');
+        c.fillStyle = gl; c.fillRect(hd[0] - wBase * 3, hd[1] - wBase * 3, wBase * 6, wBase * 6);
+      }
+    });
+  },
+
+  drawCraterGlow(g, s, T) {
+    const c = this.ctx, y = g.gy - g.hpx + g.dip * 0.7;
+    const a = smooth(0.85, 1, s.m) * 0.9 * (s.ph === 7 ? 1 - s.cool * 0.8 : 1);
+    if (a > 0.01) {
+      c.fillStyle = `rgba(245,140,50,${a})`; c.beginPath(); c.ellipse(g.cx, y, g.cw * 0.95, g.dip * 0.75, 0, 0, 7); c.fill();
+    }
+    const gl = (0.15 * s.vent + 0.5 * s.inten) * (0.85 + 0.15 * Math.sin(T * 9));
+    if (gl > 0.02) {
+      const r = g.cw * 6, gr = c.createRadialGradient(g.cx, y, 0, g.cx, y, r);
+      gr.addColorStop(0, `rgba(255,150,60,${gl})`); gr.addColorStop(1, 'rgba(255,150,60,0)');
+      c.fillStyle = gr; c.fillRect(g.cx - r, y - r, r * 2, r * 2);
+    }
+  },
+
+  drawParticles(g, s) {
+    const c = this.ctx, H = g.H, ox = g.cx, oy = g.gy - g.hpx;
+    for (const p of Engine.parts) {
+      const x = ox + p.x * H, y = oy + p.y * H, r = (p.s0 + p.age * p.g) * H;
+      if (p.t === 'm') {
+        const cl = clamp(p.age / 3, 0, 1), col = mix3(mix3([150, 45, 35], [255, 200, 90], g.d.tN), [70, 40, 36], cl), rr = Math.max(1.8, r);
+        c.globalCompositeOperation = 'lighter'; c.globalAlpha = 0.35 * (1 - cl);
+        c.drawImage(this.sprites.glow, x - rr * 3, y - rr * 3, rr * 6, rr * 6);
+        c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1;
+        c.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`; c.beginPath(); c.arc(x, y, rr, 0, 7); c.fill();
+        continue;
+      }
+      if (p.t === 'e') {
+        c.globalCompositeOperation = 'lighter'; c.globalAlpha = clamp(1 - p.age / p.life, 0, 1);
+        c.fillStyle = '#ffb04a'; c.beginPath(); c.arc(x, y, Math.max(1, r * H / H * 1), 0, 7); c.fill();
+        c.globalCompositeOperation = 'source-over';
+        continue;
+      }
+      const base = p.t === 'a' ? 0.5 : 0.18;
+      c.globalAlpha = Math.min(1, p.age / 0.6) * Math.pow(1 - p.age / p.life, 1.3) * base;
+      c.drawImage(p.t === 'a' ? this.sprites.ash : this.sprites.smoke, x - r, y - r, r * 2, r * 2);
+      if (p.t === 'a' && p.age < 1.4) {
+        c.globalAlpha = (1 - p.age / 1.4) * 0.35; c.globalCompositeOperation = 'lighter';
+        c.drawImage(this.sprites.glow, x - r, y - r, r * 2, r * 2); c.globalCompositeOperation = 'source-over';
+      }
+    }
+    c.globalAlpha = 1;
+  },
+
+  drawOverlays(g, s) {
+    const c = this.ctx, v = this.v;
+    // escala de altura
+    const sx = g.cx - g.bw - 26, top = g.gy - g.hpx, km = (1.5 + Engine.params.height / 100 * 3.5).toFixed(1);
+    c.strokeStyle = 'rgba(152,164,179,.55)'; c.fillStyle = '#98A4B3'; c.lineWidth = 1;
+    c.beginPath(); c.moveTo(sx, g.gy); c.lineTo(sx, top); c.moveTo(sx - 4, g.gy); c.lineTo(sx + 4, g.gy); c.moveTo(sx - 4, top); c.lineTo(sx + 4, top); c.stroke();
+    c.font = '600 10px Inter, sans-serif'; c.textAlign = 'right'; c.fillText(km + ' km', sx - 8, (g.gy + top) / 2 + 3);
+
+    if (v < 0.5) return;
+    const a = smooth(0.5, 1, v); c.globalAlpha = a;
+    c.font = '600 10px Inter, sans-serif'; c.letterSpacing = '1.5px'; c.textAlign = 'left';
+    const ch = this.chamber(g, s, Engine.T), craterY = g.gy - g.hpx;
+    const tag = (txt, x, y, x2, y2) => {
+      c.strokeStyle = 'rgba(152,164,179,.5)'; c.beginPath(); c.moveTo(x, y); c.lineTo(x2, y2); c.stroke();
+      c.fillStyle = '#F1F4F7'; c.fillText(txt, x2 + 6, y2 + 3);
+    };
+    tag('CRATERA', g.cx + g.cw, craterY, g.cx + g.cw + 60, craterY - 14);
+    tag('CHAMINÉ', g.cx + g.cw * 0.6, g.gy - g.hpx * 0.45, g.cx + g.bw * 0.4, g.gy - g.hpx * 0.62);
+    tag('CÂMARA MAGMÁTICA', g.cx + ch.rx * 0.7, ch.cy, g.cx + ch.rx + 24, ch.cy);
+    tag('SUPERFÍCIE', g.cx + g.bw * 1.0, g.gy, g.cx + g.bw * 1.1, g.gy - 26);
+    c.fillStyle = '#98A4B3'; c.fillText('CROSTA', 16, g.gy + 22);
+    c.textAlign = 'center'; c.fillStyle = '#98A4B3';
+    c.fillText('CINZAS ↑', g.cx, Math.max(18, craterY - H_OFF(g)));
+    c.globalAlpha = 1; c.letterSpacing = '0px';
+  },
+};
+const H_OFF = g => g.H * 0.12;
+
+/* ---------------------------------------------------------------------
+   CONTEÚDO EDUCACIONAL
+   --------------------------------------------------------------------- */
+const svgBar = (grad, extra = '') => `<svg viewBox="0 0 200 34"><defs><linearGradient id="g${grad[0]}" x1="0" x2="1"><stop offset="0" stop-color="${grad[1]}"/><stop offset="1" stop-color="${grad[2]}"/></linearGradient></defs><rect x="0" y="12" width="200" height="10" rx="5" fill="url(#g${grad[0]})"/>${extra}</svg>`;
+const EDU = [
+  { t: 'MAGMA', d: 'Rocha derretida que fica armazenada na câmara magmática, abaixo do vulcão. Quando chega à superfície, passa a se chamar lava.', vi: 'Brilho laranja na câmara', svg: svgBar(['m', '#8c2620', '#ffc85a']) },
+  { t: 'PRESSÃO', d: 'Gases dissolvidos e magma novo empurram a rocha ao redor. Quando a pressão supera a resistência da rocha, o caminho até a cratera se abre.', vi: 'Medidor de pressão (barra)', svg: svgBar(['p', '#2a3541', '#D9A441'], '<rect x="0" y="12" width="140" height="10" rx="5" fill="#D9A441"/>') },
+  { t: 'VISCOSIDADE', d: 'Mede a facilidade com que o magma flui. Baixa: escorre rápido e fino, como mel morno. Alta: lento e espesso, como pasta.', vi: 'Fluxo fino x fluxo espesso', svg: '<svg viewBox="0 0 200 34"><path d="M0 8 Q60 8 100 12 T200 14" stroke="#D58C45" stroke-width="3" fill="none"/><path d="M0 26 Q60 26 100 24 T150 24" stroke="#D95C59" stroke-width="9" stroke-linecap="round" fill="none"/></svg>' },
+  { t: 'LAVA', d: 'Magma que alcançou a superfície. Ela desce pela encosta, se divide em pequenos fluxos e esfria até formar rocha escura.', vi: 'Fluxo que esfria (claro → escuro)', svg: svgBar(['l', '#ffb04a', '#3a2a28']) },
+  { t: 'CINZAS', d: 'Fragmentos minúsculos de rocha e vidro vulcânico lançados no ar. O vento define para onde a nuvem viaja e quanto ela se espalha.', vi: 'Nuvem inclinada pelo vento', svg: '<svg viewBox="0 0 200 34"><g fill="#98A4B3"><circle cx="30" cy="24" r="5" opacity=".7"/><circle cx="60" cy="18" r="7" opacity=".55"/><circle cx="98" cy="14" r="9" opacity=".4"/><circle cx="145" cy="12" r="11" opacity=".28"/></g><path d="M172 28h20m-6-5 6 5-6 5" stroke="#D9A441" fill="none" stroke-width="2"/></svg>' },
+  { t: 'GASES', d: 'Vapor d’água, CO₂ e outros gases ficam dissolvidos no magma. Ao subir, expandem como bolhas em um refrigerante e aumentam a pressão.', vi: 'Bolhas subindo na chaminé', svg: '<svg viewBox="0 0 200 34"><g fill="none" stroke="#F1F4F7" stroke-opacity=".7"><circle cx="30" cy="26" r="3"/><circle cx="70" cy="18" r="5"/><circle cx="120" cy="12" r="7"/><circle cx="175" cy="9" r="9"/></g></svg>' },
+  { t: 'ATIVIDADE SÍSMICA', d: 'O magma e os gases fraturam a rocha ao se mover, gerando pequenos tremores. Mais tremores costumam indicar mais atividade.', vi: 'Linha de sismógrafo', svg: '<svg viewBox="0 0 200 34"><polyline points="0,17 25,17 32,10 38,24 46,6 54,28 62,12 70,17 110,17 116,13 122,21 128,17 200,17" fill="none" stroke="#5FAE7B" stroke-width="2"/></svg>' },
+];
+
+/* ---------------------------------------------------------------------
+   UI — estado da interface e ligação com o DOM
+   --------------------------------------------------------------------- */
+const PARAM_CFG = [
+  { id: 'height', n: '01', label: 'ALTURA DO VULCÃO', lo: 'BAIXO', hi: 'ALTO', desc: 'Altera a escala da montanha e o alcance potencial da lava.', fmt: v => (1.5 + v / 100 * 3.5).toFixed(1) + ' km' },
+  { id: 'pressure', n: '02', label: 'PRESSÃO DO MAGMA', lo: 'BAIXA', hi: 'ALTA', desc: 'Controla tremores, intensidade da emissão e força da erupção.', fmt: v => v + '%' },
+  { id: 'visc', n: '03', label: 'VISCOSIDADE DO MAGMA', seg: ['BAIXA', 'MÉDIA', 'ALTA'], desc: 'A viscosidade afeta a facilidade com que o magma flui.' },
+  { id: 'temp', n: '04', label: 'TEMPERATURA', lo: 'BAIXA', hi: 'ALTA', desc: 'Influencia a cor e a velocidade da lava.', fmt: v => (700 + v * 5) + ' °C' },
+  { id: 'wind', n: '05', label: 'VENTO', lo: 'NENHUM', hi: 'FORTE', desc: 'Define a direção e a dispersão da nuvem de cinzas.', fmt: v => (v < 8 ? 'NENHUM' : v < 40 ? 'LEVE' : v < 70 ? 'MODERADO' : 'FORTE') + ' · ' + v + '%' },
+];
+
+const UI = {
+  cache: {},
+  set(id, text, cls) {
+    const k = id + '|' + text + '|' + (cls || ''), el = $('#' + id);
+    if (this.cache[id] === k) return; this.cache[id] = k;
+    el.textContent = text; if (cls !== undefined) el.className = el.className.replace(/\bt[0-2n]\b/g, '').trim() + ' ' + cls;
+  },
+
+  build() {
+    $('#params').innerHTML = PARAM_CFG.map(p => `
+      <div class="param">
+        <div class="p-head"><span class="p-label"><i>${p.n}</i>${p.label}</span><span class="p-val" id="pv-${p.id}"></span></div>
+        ${p.seg
+          ? `<div class="seg full" id="in-visc">${p.seg.map((s, i) => `<button data-v="${i}">${s}</button>`).join('')}</div>`
+          : `<input type="range" min="0" max="100" id="in-${p.id}"><div class="p-ends"><span>${p.lo}</span><span>${p.hi}</span></div>`}
+        <div class="p-desc">${p.desc}</div>
+      </div>`).join('');
+    $('#phaseList').innerHTML = PHASES.map((p, i) => `<li id="ph${i}"><b>${String(i + 1).padStart(2, '0')}</b>${p.pt}</li>`).join('');
+    $('#timeline').innerHTML = STEPS.map((s, i) => `<button class="step" data-i="${i}"><div class="n">${String(i + 1).padStart(2, '0')}</div><div class="t">${s.t}</div><i></i></button>`).join('');
+    $('#eduList').innerHTML = EDU.map(e => `<div class="edu-item"><h4>${e.t}</h4><p>${e.d}</p><div class="vi">INDICADOR VISUAL · ${e.vi.toUpperCase()}</div>${e.svg}</div>`).join('');
+
+    PARAM_CFG.forEach(p => {
+      if (p.seg) $$('#in-visc button').forEach(b => b.onclick = () => { Engine.params.visc = +b.dataset.v; this.syncParams(); });
+      else $('#in-' + p.id).oninput = e => { Engine.params[p.id] = +e.target.value; this.syncParams(); };
+    });
+    $('#btnSimulate').onclick = () => Engine.start();
+    $('#btnPause').onclick = () => { Engine.paused = true; };
+    $('#btnResume').onclick = () => { Engine.paused = false; };
+    const reset = () => { Engine.reset(); Renderer.target = 0; this.syncParams(); };
+    $('#btnReset').onclick = $('#btnReset2').onclick = reset;
+    $$('#speedSeg button').forEach(b => b.onclick = () => { Engine.speed = +b.dataset.s; });
+    $$('#viewSeg button').forEach(b => b.onclick = () => { Renderer.target = +b.dataset.view; });
+    $('#pView').onclick = () => { Renderer.target = Renderer.target ? 0 : 1; };
+    $('#btnPresent').onclick = () => { document.body.classList.toggle('pres'); setTimeout(() => Renderer.resize(), 30); };
+    $('#pPlay').onclick = () => {
+      if (Engine.mode === 'idle' || Engine.mode === 'done') Engine.start(); else Engine.paused = !Engine.paused;
+    };
+    $('#pNext').onclick = () => {
+      const cur = Engine.mode === 'idle' ? -1 : stepOfPhase(Engine.sample().ph);
+      if (cur < STEPS.length - 1) Engine.seek(STEPS[cur + 1].ph);
+    };
+    $$('.step').forEach(b => b.onclick = () => Engine.seek(STEPS[+b.dataset.i].ph));
+    $('#btnWhy').onclick = () => { $('#modal').hidden = false; $('#mClose').focus(); };
+    $('#mClose').onclick = () => { $('#modal').hidden = true; };
+    $('#modal').onclick = e => { if (e.target.id === 'modal') $('#modal').hidden = true; };
+    addEventListener('keydown', e => { if (e.key === 'Escape') $('#modal').hidden = true; });
+    this.syncParams();
+  },
+
+  syncParams() {
+    const P = Engine.params;
+    PARAM_CFG.forEach(p => {
+      if (p.seg) { $$('#in-visc button').forEach(b => b.classList.toggle('on', +b.dataset.v === P.visc)); $('#pv-visc').textContent = p.seg[P.visc]; }
+      else { $('#in-' + p.id).value = P[p.id]; $('#pv-' + p.id).textContent = p.fmt(P[p.id]); }
+    });
+    $('#hudWind').textContent = 'VENTO → ' + P.wind + '%';
+  },
+
+  lvl(score, cuts, names) { let i = 0; cuts.forEach(c => { if (score >= c) i++; }); return [names[i], Math.min(i, 2)]; },
+
+  render() {
+    const E = Engine, P = E.params, s = E.sample(), d = E.derived(), mode = E.mode;
+    const running = mode === 'running', idle = mode === 'idle';
+
+    // bloqueio de controles que causariam inconsistência durante a animação
+    ['height', 'pressure', 'temp'].forEach(id => $('#in-' + id).disabled = running);
+    $$('#in-visc button').forEach(b => b.disabled = running);
+    $('#btnSimulate').disabled = running;
+    $('#btnSimulate').textContent = running ? 'SIMULANDO…' : mode === 'done' ? 'SIMULAR NOVAMENTE' : 'SIMULAR ERUPÇÃO';
+    $('#btnPause').disabled = E.paused;
+    $('#btnResume').disabled = !E.paused;
+    $('#liveDot').classList.toggle('paused', E.paused);
+    this.set('liveText', E.paused ? 'PAUSADO' : 'SIMULAÇÃO AO VIVO');
+    $$('#viewSeg button').forEach(b => b.classList.toggle('on', +b.dataset.view === Renderer.target));
+    $$('#speedSeg button').forEach(b => b.classList.toggle('on', +b.dataset.s === E.speed));
+    $('#pView').textContent = Renderer.target ? 'VER SUPERFÍCIE' : 'VER CORTE TRANSVERSAL';
+    $('#pPlay').textContent = idle || mode === 'done' ? '▶ PLAY' : E.paused ? '▶ PLAY' : '❚❚ PAUSE';
+    const stp = idle ? -1 : stepOfPhase(s.ph);
+    $('#pNext').disabled = stp >= STEPS.length - 1 || (mode === 'done');
+
+    // status
+    const pct = Math.round(s.lp);
+    this.set('stPressure', pct + '%'); $('#stBar').style.width = pct + '%';
+    let mag, seis, erup, lava, ash, shk;
+    if (idle) {
+      mag = this.lvl(s.lp * (1.2 - 0.4 * d.visc), [50, 80], ['BAIXO', 'MODERADO', 'ALTO']);
+      seis = this.lvl(s.lp, [50, 75], ['BAIXA', 'MODERADA', 'ALTA']);
+      erup = this.lvl(s.lp * (0.8 + 0.4 * d.hn) * (0.85 + 0.3 * d.tN), [45, 65, 85], ['BAIXO', 'MODERADO', 'ALTO', 'EXTREMO']);
+      lava = ['INATIVO', -1]; ash = ['FUMAÇA MÍNIMA', -1];
+      shk = s.shake > 0.02 ? ['LEVE', 0] : ['NENHUM', -1];
+    } else {
+      const ph = mode === 'done' ? 7 : s.ph;
+      mag = [['ESTÁVEL', 'ESTÁVEL', 'SUBINDO', 'SUBINDO', 'ERUPTIVO', 'ERUPTIVO', 'ERUPTIVO', 'RECUANDO'][ph], [0, 0, 1, 1, 2, 2, 2, 1][ph]];
+      seis = this.lvl(s.shake, [0.3, 0.7], ['BAIXA', 'MODERADA', 'ALTA']);
+      erup = mode === 'done' ? ['ENCERRADA', 0] : [['INATIVA', 'INATIVA', 'INATIVA', 'IMINENTE', 'ATIVA', 'ATIVA', 'ATIVA', 'ENCERRANDO'][ph], [0, 0, 0, 1, 2, 2, 2, 1][ph]];
+      lava = mode === 'done' ? ['SOLIDIFICADO', 0] : s.lavaT <= 0 ? ['INATIVO', -1] : ph === 7 ? ['SOLIDIFICANDO', 1] : ['ATIVO', 2];
+      ash = [['NENHUMA', 'NENHUMA', 'NENHUMA', 'NENHUMA', 'FORMANDO', 'EXPANDINDO', 'DISPERSANDO', 'DISSIPANDO'][ph], [-1, -1, -1, -1, 1, 2, 1, 0][ph]];
+      shk = s.shake < 0.05 ? ['NENHUM', -1] : s.shake < 0.3 ? ['LEVE', 0] : s.shake < 0.7 ? ['MODERADO', 1] : ['FORTE', 2];
+    }
+    const tone = t => (t < 0 ? 'tn' : 't' + t);
+    this.set('kMagma', idle ? 'MOVIMENTO DO MAGMA' : 'MAGMA');
+    this.set('kEruption', idle ? 'RISCO DE ERUPÇÃO' : 'ERUPÇÃO');
+    this.set('stMagma', mag[0], tone(mag[1])); this.set('stSeis', seis[0], tone(seis[1])); this.set('stEruption', erup[0], tone(erup[1]));
+    this.set('efLava', lava[0], tone(lava[1])); this.set('efAsh', ash[0], tone(ash[1])); this.set('efShake', shk[0], tone(shk[1]));
+
+    // fases, timeline e legenda
+    PHASES.forEach((_, i) => {
+      const li = $('#ph' + i);
+      li.classList.toggle('on', running && s.ph === i);
+      li.classList.toggle('done', mode === 'done' || (running && s.ph > i));
+    });
+    $$('.step').forEach((el, i) => {
+      el.classList.toggle('on', !idle && i === stp && mode !== 'done');
+      el.classList.toggle('done', mode === 'done' || (!idle && i < stp));
+      const prog = $('i', el); const st = STEPS[i], end = i < 5 ? START[STEPS[i + 1].ph] : TOTAL;
+      prog.style.width = (!idle && i === stp && mode !== 'done') ? clamp((E.sim - START[st.ph]) / (end - START[st.ph]), 0, 1) * 100 + '%' : '0';
+    });
+    this.set('hudPhase', idle ? 'REPOUSO · MONITORAMENTO' : mode === 'done' ? 'CICLO CONCLUÍDO' : 'FASE ' + String(s.ph + 1).padStart(2, '0') + ' · ' + PHASES[s.ph].pt);
+    const cap = idle ? 'Sistema em repouso: a pressão sobe lentamente e pequenos tremores são registrados.'
+      : mode === 'done' ? 'Ciclo concluído. Ajuste os parâmetros e simule novamente para comparar.'
+        : document.body.classList.contains('pres') ? STEPS[stp].cap : PHASES[s.ph].cap;
+    this.set('caption', cap);
+  },
+};
+
+/* ---------------------------------------------------------------------
+   LOOP PRINCIPAL
+   --------------------------------------------------------------------- */
+UI.build();
+Renderer.init($('#cv'));
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  Engine.step(dt);
+  Renderer.frame(dt);
+  UI.render();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
